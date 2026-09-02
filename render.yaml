@@ -12,9 +12,14 @@ services:
   - type: web
     name: pego-api
     runtime: node
-    plan: starter # persistent instance; the free plan sleeps and would stall the scheduler
+    # NOTE: the free plan SLEEPS after ~15 min idle — the in-process scheduler
+    # (expiring offers, scheduled rides, payment reconciliation) does not run
+    # while asleep, and the first request after sleep is a slow cold start. Fine
+    # for testing that the apps can reach the API; move to a paid plan (starter)
+    # before real operation. A free web service is always a single instance,
+    # which is what the in-process scheduler/limiter require anyway.
+    plan: free
     region: frankfurt # closest Render region to the Supabase eu-west-1 database
-    numInstances: 1 # do NOT scale out — in-process scheduler/limiter
     branch: main
     # Build the shared packages the API depends on, then the API itself. The
     # RN-only `ui` package is intentionally not built here.
