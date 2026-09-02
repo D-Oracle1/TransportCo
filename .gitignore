@@ -33,3 +33,6 @@ logs/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Vercel
+.vercel
