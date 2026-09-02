@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "services/*"
+  - "packages/*"
+
+# esbuild ships a platform binary and needs its install script to run (vitest
+# and tsx depend on it). Every other dependency is installed with scripts
+# blocked, so a compromised transitive package cannot execute on install.
+allowBuilds:
+  esbuild: true

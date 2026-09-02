@@ -1,0 +1,39 @@
+{
+  "name": "@transportco/utils",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "source": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@transportco/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.9.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./secure": {
+      "types": "./dist/secure.d.ts",
+      "default": "./dist/secure.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "secure": [
+        "dist/secure.d.ts"
+      ],
+      "*": [
+        "dist/index.d.ts"
+      ]
+    }
+  }
+}

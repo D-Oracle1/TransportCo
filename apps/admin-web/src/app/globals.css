@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Console styling.
+ *
+ * Desktop-first, because dispatch happens on a desk with a large screen — but
+ * never unusable on a tablet, since the operations manager checks the board
+ * from the yard. Density is deliberately high: a dispatcher wants twenty trips
+ * visible, not six with generous whitespace.
+ */
+
+:root {
+  --console-sidebar: 248px;
+  --console-header: 60px;
+}
+
+@layer base {
+  html,
+  body {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-ink-50 text-ink-800 antialiased;
+    font-feature-settings: 'tnum' 1; /* tabular figures: fares line up in columns */
+  }
+
+  /* Money and references are read column-wise; proportional digits make that
+     harder than it needs to be. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-ink-200 bg-white shadow-card;
+  }
+
+  .card-header {
+    @apply flex items-center justify-between border-b border-ink-100 px-5 py-3.5;
+  }
+
+  .card-title {
+    @apply text-sm font-semibold text-ink-800;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold
+           transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    min-height: 38px;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700;
+  }
+
+  .btn-accent {
+    @apply btn bg-accent-500 text-ink-900 hover:bg-accent-400 active:bg-accent-600;
+  }
+
+  .btn-ghost {
+    @apply btn border border-ink-200 bg-white text-ink-700 hover:bg-ink-50;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger-500 text-white hover:bg-danger-700;
+  }
+
+  .input {
+    @apply w-full rounded-md border border-ink-300 bg-white px-3 py-2 text-sm text-ink-900
+           placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500;
+    min-height: 38px;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-500;
+  }
+
+  .table {
+    @apply w-full text-left text-sm;
+  }
+
+  .table thead th {
+    @apply border-b border-ink-200 bg-ink-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-500;
+  }
+
+  .table tbody td {
+    @apply border-b border-ink-100 px-4 py-3 align-middle text-ink-700;
+  }
+
+  .table tbody tr:hover {
+    @apply bg-ink-50/70;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold;
+  }
+
+  .stat-value {
+    @apply text-2xl font-bold tabular text-ink-900;
+  }
+
+  .stat-label {
+    @apply text-xs font-medium uppercase tracking-wide text-ink-500;
+  }
+}
+
+/* The live map and long tables scroll inside themselves; the page never scrolls
+   sideways. */
+.scroll-x {
+  @apply overflow-x-auto;
+}

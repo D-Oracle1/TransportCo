@@ -1,0 +1,29 @@
+# Local PostgreSQL for development.
+#   docker compose -f infra/docker-compose.yml up -d
+#
+# Matches the DATABASE_URL in .env.example. Not a production configuration:
+# production should use a managed database with automated backups and
+# point-in-time recovery.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: transportco-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: transportco
+      # Deterministic collation so ORDER BY behaves identically everywhere.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - transportco-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d transportco"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  transportco-pgdata:

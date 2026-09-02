@@ -1,0 +1,35 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# env / secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+service-account*.json
+
+# expo / react-native
+.expo/
+.expo-shared/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+android/
+ios/
+
+# tooling
+.turbo/
+.eslintcache
+.DS_Store
+Thumbs.db
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*

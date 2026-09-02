@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node", "vitest/globals"],
+    // The API is an application, not a library: nothing imports its types, so
+    // emitting declarations only buys the pnpm "inferred type cannot be named"
+    // class of error on every Express router.
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

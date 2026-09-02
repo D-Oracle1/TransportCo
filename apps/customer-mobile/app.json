@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "TransportCo",
+    "slug": "transportco-customer",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "transportco",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#1f6f7a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.transportco.customer",
+      "config": { "googleMapsApiKey": "$EXPO_PUBLIC_GOOGLE_MAPS_IOS_KEY" },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We use your location to set your pickup point and show your driver on the way.",
+        "UIBackgroundModes": ["location"]
+      }
+    },
+    "android": {
+      "package": "com.transportco.customer",
+      "adaptiveIcon": { "backgroundColor": "#1f6f7a" },
+      "config": { "googleMaps": { "apiKey": "$EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY" } },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "We use your location to set your pickup point and track your ride."
+        }
+      ]
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}

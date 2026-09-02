@@ -1,0 +1,28 @@
+{
+  "name": "transportco",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TransportCo \u2014 company-operated transportation platform (customer app, driver app, admin console, API).",
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/**\" build && pnpm --filter @transportco/api build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:unit": "pnpm --filter @transportco/api test",
+    "dev:api": "pnpm --filter @transportco/api dev",
+    "dev:admin": "pnpm --filter @transportco/admin-web dev",
+    "dev:customer": "pnpm --filter @transportco/customer-mobile start",
+    "dev:driver": "pnpm --filter @transportco/driver-mobile start",
+    "db:migrate": "pnpm --filter @transportco/api db:migrate",
+    "db:seed": "pnpm --filter @transportco/api db:seed",
+    "db:reset": "pnpm --filter @transportco/api db:reset",
+    "clean": "pnpm -r exec rimraf dist .turbo node_modules/.cache"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
