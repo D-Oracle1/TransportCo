@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { loadEnv, resetEnvCache } from '@transportco/config';
+import { loadEnv, resetEnvCache } from '@transportco/config/env';
 
 /**
  * Configuration guardrails.
@@ -107,7 +107,7 @@ describe('production guardrails', () => {
 
 describe('redaction', () => {
   it('never returns a secret in the describable config', async () => {
-    const { describeConfig } = await import('@transportco/config');
+    const { describeConfig } = await import('@transportco/config/env');
     const described = describeConfig(loadEnv(env()));
 
     expect(described.JWT_SECRET).toBe('[redacted]');

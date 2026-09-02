@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~4.0.1",
     "@transportco/config": "workspace:*",
     "@transportco/types": "workspace:*",
     "@transportco/ui": "workspace:*",

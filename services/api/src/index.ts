@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { describeConfig } from '@transportco/config';
+import { describeConfig } from '@transportco/config/env';
 import { createApp } from './app';
 import { env } from './config';
 import { logger } from './lib/logger';

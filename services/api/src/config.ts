@@ -1,4 +1,4 @@
-import { loadEnv, type AppEnv } from '@transportco/config';
+import { loadEnv, type AppEnv } from '@transportco/config/env';
 
 /**
  * Boot-time configuration. `loadEnv` throws on anything missing or

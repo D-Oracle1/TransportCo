@@ -4,6 +4,13 @@
     "rootDir": "src",
     "outDir": "dist",
     "types": ["node", "vitest/globals"],
+    // classic moduleResolution ("Node") doesn't read the config package's
+    // `exports` map, so point tsc at the env module's declarations directly.
+    // Runtime (tsx/node/vitest) resolves the subpath via the exports map.
+    "baseUrl": ".",
+    "paths": {
+      "@transportco/config/env": ["../../packages/config/dist/env.d.ts"]
+    },
     // The API is an application, not a library: nothing imports its types, so
     // emitting declarations only buys the pnpm "inferred type cannot be named"
     // class of error on every Express router.
