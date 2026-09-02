@@ -7,7 +7,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eas-build-post-install": "pnpm --filter @transportco/config --filter @transportco/types --filter @transportco/utils --filter @transportco/validation build"
   },
   "dependencies": {
     "@expo/metro-runtime": "~4.0.1",
