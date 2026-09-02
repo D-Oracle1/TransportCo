@@ -14,7 +14,8 @@
     "db:migrate": "tsx src/db/migrate.ts up",
     "db:seed": "tsx src/db/seed.ts",
     "db:reset": "tsx src/db/migrate.ts reset && tsx src/db/seed.ts",
-    "smoke": "node scripts/smoke.cjs"
+    "smoke": "node scripts/smoke.cjs",
+    "smoke:isolated": "node scripts/smoke-isolated.mjs"
   },
   "dependencies": {
     "@transportco/config": "workspace:*",
