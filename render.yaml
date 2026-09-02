@@ -54,3 +54,24 @@ services:
         sync: false
       - key: API_BASE_URL # this service's public URL, e.g. https://pego-api.onrender.com
         sync: false
+
+  # ── Admin console (Next.js) ────────────────────────────────────────────────
+  # The operations dashboard. A Node web service running `next start`; it has
+  # server-side API routes and a proxy, so it is NOT a static export.
+  - type: web
+    name: pego-admin
+    runtime: node
+    plan: free # free sleeps when idle — fine for the ops console; upgrade later
+    region: frankfurt
+    branch: main
+    # Build the workspace deps admin-web transpiles, then `next build`.
+    buildCommand: "npm install -g pnpm@11.20.0 && pnpm install --frozen-lockfile && pnpm --filter \"@transportco/admin-web...\" build"
+    # `next start` binds the PORT that Render injects when -p is omitted; run it
+    # in the admin-web package (not `pnpm start`, whose script hardcodes :3000).
+    startCommand: "pnpm --filter @transportco/admin-web exec next start"
+    envVars:
+      - key: NODE_VERSION
+        value: "24.18.0"
+      # Public (embedded at build time) — the live API. Not a secret.
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: "https://pego-api-8a10.onrender.com"
