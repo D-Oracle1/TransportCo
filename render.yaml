@@ -22,20 +22,15 @@ services:
     region: frankfurt # closest Render region to the Supabase eu-west-1 database
     branch: main
     # Build the shared packages the API depends on, then the API itself. The
-    # RN-only `ui` package is intentionally not built here.
-    buildCommand: >-
-      corepack enable &&
-      pnpm install --frozen-lockfile &&
-      pnpm --filter @transportco/config
-        --filter @transportco/types
-        --filter @transportco/utils
-        --filter @transportco/validation build &&
-      pnpm --filter @transportco/api build
+    # RN-only `ui` package is intentionally not built here. pnpm is installed
+    # directly via npm (pinned to the repo's version) rather than corepack,
+    # whose bundled signing keys fail to verify current pnpm releases on Render.
+    # Single line on purpose: an indented YAML folded scalar keeps newlines,
+    # which would split the `--filter` flags into separate shell commands.
+    buildCommand: "npm install -g pnpm@11.20.0 && pnpm install --frozen-lockfile && pnpm --filter @transportco/config --filter @transportco/types --filter @transportco/utils --filter @transportco/validation build && pnpm --filter @transportco/api build"
     # Apply migrations, then start. If a migration fails the service will not
     # start — a bad schema should fail the deploy, not a customer's request.
-    startCommand: >-
-      node services/api/dist/db/migrate.js up &&
-      node services/api/dist/index.js
+    startCommand: "node services/api/dist/db/migrate.js up && node services/api/dist/index.js"
     healthCheckPath: /health/ready
     envVars:
       - key: NODE_VERSION
