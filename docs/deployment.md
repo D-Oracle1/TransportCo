@@ -46,6 +46,26 @@ Behind a load balancer:
 Redis.** Two instances would run every background job twice — double reminders,
 double dispatch attempts. This is the first thing to change as the fleet grows.
 
+### Render (blueprint)
+
+`render.yaml` at the repo root deploys the API as a single-instance web service.
+In Render: **New → Blueprint**, point it at this repo, then set the secret env
+vars (the `sync: false` ones) in the dashboard:
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | Supabase **session-mode** pooler URL (port 5432), eu-west-1 |
+| `DATABASE_SSL` | `true` |
+| `JWT_SECRET` | ≥32 chars, not the placeholder — `openssl rand -base64 48` |
+| `CORS_ALLOWED_ORIGINS` | the admin-web origin(s), comma-separated (never `*`) |
+| `API_BASE_URL` | the service's own public URL, e.g. `https://pego-api.onrender.com` |
+| `NODE_ENV` | `development` for a staging box (mocks allowed, returns `devOtp`); `production` once you have live Paystack/Flutterwave + Google Maps keys |
+
+Promoting to `NODE_ENV=production` additionally requires `PAYMENT_PROVIDER_DEFAULT`
+and `GOOGLE_MAPS_PROVIDER` set to real providers with their keys — the API
+refuses to boot on a mock provider in production. The blueprint binds the port
+Render injects via `PORT`, migrates on start, and polls `/health/ready`.
+
 ## Admin console
 
 ```bash

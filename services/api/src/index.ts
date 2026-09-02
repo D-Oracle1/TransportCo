@@ -34,8 +34,11 @@ async function main(): Promise<void> {
   initialiseRealtime(server);
   startScheduler();
 
-  server.listen(env.API_PORT, () => {
-    logger.info({ port: env.API_PORT, env: env.NODE_ENV }, 'TransportCo API listening');
+  // Platform hosts (Render, Railway, Fly, Heroku…) inject the port to bind via
+  // PORT; honour it when present, otherwise fall back to the configured API_PORT.
+  const listenPort = Number(process.env.PORT) || env.API_PORT;
+  server.listen(listenPort, () => {
+    logger.info({ port: listenPort, env: env.NODE_ENV }, 'TransportCo API listening');
   });
 
   // Nigerian mobile clients on slow links need a generous header timeout;
