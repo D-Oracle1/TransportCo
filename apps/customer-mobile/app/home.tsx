@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutAnimation, Platform, Pressable, ScrollView, UIManager, View } from 'react-native';
+import { Animated, LayoutAnimation, Platform, Pressable, ScrollView, UIManager, useWindowDimensions, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -47,7 +47,18 @@ const LANDMARKS: Place[] = [
   { address: 'Eleme Junction, Port Harcourt', latitude: 4.8009, longitude: 7.0847 },
 ];
 
-type Phase = 'choose' | 'quoted' | 'negotiate';
+interface TrackingTrip {
+  id: string;
+  status: string;
+  statusLabel: string;
+  quotedFareMinor: number;
+  finalFareMinor: number | null;
+  pickup: { address: string };
+  destination: { address: string };
+  driver: { name: string; vehicle: { make: string; model: string; color: string; plateNumber: string } | null } | null;
+}
+
+type Phase = 'choose' | 'quoted' | 'negotiate' | 'tracking';
 type Editing = 'from' | 'to' | null;
 
 export default function Home() {
@@ -70,6 +81,42 @@ export default function Home() {
   const [banner, setBanner] = useState<{ message: string; tone: 'info' | 'danger' | 'success' } | null>(null);
   const [remaining, setRemaining] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Tracking: after booking, the sheet flips to a black card instead of a page.
+  const { height: winH } = useWindowDimensions();
+  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [tracking, setTracking] = useState<TrackingTrip | null>(null);
+  const flip = useRef(new Animated.Value(0)).current;
+
+  function enterTracking(tripId: string) {
+    setBanner(null);
+    setTrackingId(tripId);
+    setPhase('tracking');
+    setEditing(null);
+    Animated.timing(flip, { toValue: 1, duration: 550, useNativeDriver: true }).start();
+  }
+  function leaveTracking() {
+    Animated.timing(flip, { toValue: 0, duration: 380, useNativeDriver: true }).start(() => {
+      setTrackingId(null);
+      setTracking(null);
+      resetFlow();
+    });
+  }
+  async function cancelRide() {
+    if (!trackingId) return;
+    setBusy('accept');
+    await api.post(`/trips/${trackingId}/cancel`, { reason: 'changed_mind' }).catch(() => undefined);
+    setBusy(null);
+    leaveTracking();
+  }
+
+  useEffect(() => {
+    if (!trackingId) return;
+    const pull = () => { void api.get<TrackingTrip>(`/trips/${trackingId}`).then(setTracking).catch(() => undefined); };
+    pull();
+    const t = setInterval(pull, 6000);
+    return () => clearInterval(t);
+  }, [trackingId]);
 
   useEffect(() => {
     void (async () => {
@@ -161,8 +208,7 @@ export default function Home() {
       const tripId = await createTrip();
       if (!tripId) return;
       await api.post(`/trips/${tripId}/accept-fare`, {});
-      router.push({ pathname: '/trip', params: { id: tripId } });
-      resetFlow();
+      enterTracking(tripId);
     } catch (e) { setBanner({ message: e instanceof ApiError ? e.message : 'We could not book this trip.', tone: 'danger' }); }
     finally { setBusy(null); }
   }
@@ -182,7 +228,7 @@ export default function Home() {
     try {
       const [t, n] = await Promise.all([api.get<TripView>(`/trips/${trip.id}`), api.get<NegotiationView | null>(`/trips/${trip.id}/negotiation`)]);
       setTrip(t); setNegotiation(n);
-      if (t.fareLocked) { router.push({ pathname: '/trip', params: { id: t.id } }); resetFlow(); }
+      if (t.fareLocked) { enterTracking(t.id); }
     } catch { /* keep */ }
   }, [trip, router]);
   async function submitOffer() {
@@ -192,7 +238,7 @@ export default function Home() {
     try {
       const r = await api.post<{ outcome: string; message: string }>(`/trips/${trip.id}/negotiate`, { amountMinor: naira * 100 });
       setOffer('');
-      if (r.outcome === 'accepted') { router.push({ pathname: '/trip', params: { id: trip.id } }); resetFlow(); return; }
+      if (r.outcome === 'accepted') { enterTracking(trip.id); return; }
       setBanner({ message: r.message, tone: r.outcome === 'rejected' || r.outcome === 'limit_reached' ? 'danger' : 'info' });
       await reloadTrip();
     } catch (e) { setBanner({ message: e instanceof ApiError ? e.message : 'We could not send your offer.', tone: 'danger' }); }
@@ -204,7 +250,7 @@ export default function Home() {
     try {
       const pending = negotiation?.pendingOffer?.party === 'company' ? negotiation.pendingOffer.id : undefined;
       await api.post(`/trips/${trip.id}/accept-fare`, pending ? { offerId: pending } : {});
-      router.push({ pathname: '/trip', params: { id: trip.id } }); resetFlow();
+      enterTracking(trip.id);
     } catch (e) { setBanner({ message: e instanceof ApiError ? e.message : 'We could not confirm that fare.', tone: 'danger' }); await reloadTrip(); }
     finally { setBusy(null); }
   }
@@ -262,7 +308,24 @@ export default function Home() {
         </Pressable>
       ) : null}
 
+      {/* ── TRACKING — the sheet flips to a black card after booking ─────── */}
+      {phase === 'tracking' ? (
+        <TrackingFlip
+          flip={flip}
+          height={Math.min(winH * 0.64, 580)}
+          from={pickup?.address ?? ''}
+          to={destination?.address ?? ''}
+          fareMinor={quote?.fareMinor ?? trip?.quotedFareMinor ?? 0}
+          trip={tracking}
+          onCancel={cancelRide}
+          onOpen={() => { if (trackingId) router.push({ pathname: '/trip', params: { id: trackingId } }); }}
+          onDone={leaveTracking}
+          busy={busy === 'accept'}
+        />
+      ) : null}
+
       {/* ── COLLAPSIBLE SHEET ────────────────────────────────────────────── */}
+      {phase !== 'tracking' ? (
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: theme.color.surface, borderTopLeftRadius: theme.radius['2xl'], borderTopRightRadius: theme.radius['2xl'], maxHeight: editing ? '82%' : '58%', ...theme.shadow.sheet }}>
         <Pressable onPress={() => { animate(); setEditing((e) => (e ? null : 'to')); }} hitSlop={12} style={{ alignItems: 'center', paddingTop: theme.spacing.sm, paddingBottom: 2 }}>
           <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: theme.color.borderStrong }} />
@@ -365,6 +428,7 @@ export default function Home() {
           </SafeAreaView>
         </ScrollView>
       </View>
+      ) : null}
     </View>
   );
 }
@@ -436,6 +500,101 @@ function MapCanvas({ hasRoute }: { hasRoute: boolean }) {
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.color.surface }} />
         </View>
         {hasRoute ? <View style={{ marginTop: 4, backgroundColor: theme.color.text, paddingHorizontal: 10, paddingVertical: 3, borderRadius: theme.radius.pill }}><Label variant="caption" tone="inverse">Your route</Label></View> : null}
+      </View>
+    </View>
+  );
+}
+
+const MUTED_ON_DARK = 'rgba(255,255,255,0.6)';
+
+/** The booking sheet flips over to this on booking: a black card that finds the
+ *  driver, shows who's coming, and lets the customer cancel until the driver
+ *  moves — no page change. */
+function TrackingFlip({ flip, height, from, to, fareMinor, trip, onCancel, onOpen, onDone, busy }: {
+  flip: Animated.Value; height: number; from: string; to: string; fareMinor: number;
+  trip: TrackingTrip | null; onCancel: () => void; onOpen: () => void; onDone: () => void; busy: boolean;
+}) {
+  const frontRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+  const backRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] });
+  const face = {
+    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
+    borderTopLeftRadius: theme.radius['2xl'], borderTopRightRadius: theme.radius['2xl'],
+    backfaceVisibility: 'hidden', paddingHorizontal: theme.layout.screenPadding, paddingTop: theme.spacing.lg,
+  } as const;
+
+  const status = trip?.status ?? 'FARE_LOCKED';
+  const cancellable = ['FARE_LOCKED', 'DRIVER_ASSIGNED'].includes(status);
+  const done = ['TRIP_COMPLETED', 'REVIEW_PENDING', 'PAYMENT_PENDING', 'COMPLETED', 'CANCELLED'].includes(status);
+  const fare = trip?.finalFareMinor ?? trip?.quotedFareMinor ?? fareMinor;
+
+  return (
+    <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height }}>
+      {/* FRONT — white summary, flips away */}
+      <Animated.View style={[face, { backgroundColor: theme.color.surface, transform: [{ perspective: 1200 }, { rotateY: frontRotate }], ...theme.shadow.sheet }]}>
+        <Handle dark={false} />
+        <Label variant="h2">Booking your ride…</Label>
+        <View style={{ marginTop: theme.spacing.lg }}><RouteMini from={from} to={to} inverse={false} /></View>
+        <Label variant="fare" style={{ marginTop: theme.spacing.lg }}>{formatMoney(fareMinor)}</Label>
+      </Animated.View>
+
+      {/* BACK — black tracking card */}
+      <Animated.View style={[face, { backgroundColor: theme.color.primaryDark, transform: [{ perspective: 1200 }, { rotateY: backRotate }], ...theme.shadow.sheet }]}>
+        <Handle dark />
+        <Label variant="overline" style={{ color: MUTED_ON_DARK }}>{trip?.driver ? 'Your driver' : 'Finding your driver'}</Label>
+        {trip?.driver ? (
+          <View style={{ marginTop: theme.spacing.sm, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+              <Label variant="h3" tone="inverse">{trip.driver.name.charAt(0)}</Label>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Label variant="h3" tone="inverse">{trip.driver.name}</Label>
+              {trip.driver.vehicle ? <Label variant="caption" style={{ color: MUTED_ON_DARK }} numberOfLines={1}>{trip.driver.vehicle.color} {trip.driver.vehicle.make} {trip.driver.vehicle.model} · {trip.driver.vehicle.plateNumber}</Label> : null}
+            </View>
+          </View>
+        ) : (
+          <Label variant="h2" tone="inverse" style={{ marginTop: 4 }}>{trip?.statusLabel ?? 'Assigning a company driver'}</Label>
+        )}
+
+        <View style={{ marginTop: theme.spacing.lg }}><RouteMini from={from} to={to} inverse /></View>
+
+        <View style={{ marginTop: theme.spacing.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <View>
+            <Label variant="overline" style={{ color: MUTED_ON_DARK }}>Agreed fare</Label>
+            <Label variant="h1" tone="inverse">{formatMoney(fare)}</Label>
+          </View>
+          <Pressable onPress={onOpen} hitSlop={8}><Label variant="caption" style={{ color: MUTED_ON_DARK }}>Full trip ›</Label></Pressable>
+        </View>
+
+        <View style={{ position: 'absolute', left: theme.layout.screenPadding, right: theme.layout.screenPadding, bottom: theme.spacing.xl }}>
+          {done ? (
+            <Button label="Done" variant="secondary" onPress={onDone} />
+          ) : cancellable ? (
+            <Button label="Cancel ride" variant="secondary" onPress={onCancel} loading={busy} />
+          ) : (
+            <Label variant="caption" center style={{ color: MUTED_ON_DARK }}>Your driver is on the way — sit tight.</Label>
+          )}
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
+function Handle({ dark }: { dark: boolean }) {
+  return <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: dark ? 'rgba(255,255,255,0.25)' : theme.color.borderStrong, alignSelf: 'center', marginBottom: theme.spacing.md }} />;
+}
+
+function RouteMini({ from, to, inverse }: { from: string; to: string; inverse: boolean }) {
+  const sub = inverse ? { color: 'rgba(255,255,255,0.85)' } : undefined;
+  return (
+    <View style={{ flexDirection: 'row' }}>
+      <View style={{ width: 20, alignItems: 'center', paddingTop: 4 }}>
+        <View style={{ width: 10, height: 10, borderRadius: 5, borderWidth: 3, borderColor: inverse ? theme.color.surface : theme.color.text }} />
+        <View style={{ width: 2, height: 16, backgroundColor: inverse ? 'rgba(255,255,255,0.3)' : theme.color.borderStrong, marginVertical: 3 }} />
+        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: inverse ? theme.color.surface : theme.color.text }} />
+      </View>
+      <View style={{ flex: 1, marginLeft: theme.spacing.sm, gap: theme.spacing.md }}>
+        <Label variant="body" style={sub} numberOfLines={1}>{from}</Label>
+        <Label variant="body" style={sub} numberOfLines={1}>{to}</Label>
       </View>
     </View>
   );

@@ -141,11 +141,26 @@ export default function TripScreen() {
     }
   }
 
+  async function cancelRide() {
+    setBusy('cancel');
+    try {
+      await api.post(`/trips/${id}/cancel`, { reason: 'changed_mind' });
+      router.replace('/home');
+    } catch (error) {
+      setBanner(error instanceof ApiError ? error.message : 'We could not cancel this ride.');
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (loading || !trip) return <Loading message="Loading your trip" />;
 
   const awaitingPayment = ['PAYMENT_PENDING', 'PAYMENT_FAILED'].includes(trip.status);
   const awaitingRating = trip.status === 'REVIEW_PENDING';
   const isLive = ACTIVE_STATUSES.includes(trip.status);
+  // A ride can be cancelled right up until the driver starts moving toward you.
+  const cancellable = ['FARE_LOCKED', 'DRIVER_ASSIGNED'].includes(trip.status);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.color.background }}>
@@ -298,7 +313,11 @@ export default function TripScreen() {
           <Button label="Emergency — alert operations" variant="danger" onPress={raiseSos} loading={busy === 'sos'} />
         ) : null}
 
-        <Button label="Back to home" variant="ghost" onPress={() => router.replace('/home')} />
+        {cancellable ? (
+          <Button label="Cancel ride" variant="ghost" onPress={cancelRide} loading={busy === 'cancel'} disabled={busy !== null} />
+        ) : (
+          <Button label="Back to home" variant="ghost" onPress={() => router.replace('/home')} />
+        )}
       </View>
     </SafeAreaView>
   );
