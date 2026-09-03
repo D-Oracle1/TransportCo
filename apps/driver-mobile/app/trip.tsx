@@ -187,7 +187,7 @@ export default function DriverTripScreen() {
           <Label variant="overline" tone="muted">
             {trip.reference}
           </Label>
-          <Badge label={trip.status.replace(/_/g, ' ').toLowerCase()} tone="info" />
+          <Badge label={trip.status.replace(/_/g, ' ').toLowerCase()} tone="neutral" />
         </View>
 
         {banner ? (
@@ -213,7 +213,7 @@ export default function DriverTripScreen() {
               style={{
                 marginTop: theme.spacing.md,
                 padding: theme.spacing.md,
-                backgroundColor: theme.color.infoBg,
+                backgroundColor: theme.color.surfaceMuted,
                 borderRadius: theme.radius.md,
               }}
             >
@@ -264,7 +264,7 @@ export default function DriverTripScreen() {
             </View>
             <Badge
               label={trip.paymentStatus === 'paid' ? 'Paid' : (trip.paymentMethod ?? 'cash').replace('_', ' ')}
-              tone={trip.paymentStatus === 'paid' ? 'success' : 'neutral'}
+              tone="neutral"
             />
           </View>
 
