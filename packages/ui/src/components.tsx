@@ -336,8 +336,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.background,
   },
   button: {
-    minHeight: theme.layout.minTouchTarget,
-    borderRadius: theme.radius.md,
+    minHeight: 56,
+    borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.xl,
@@ -345,14 +345,13 @@ const styles = StyleSheet.create({
   },
   buttonLabel: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   card: {
     backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
+    borderRadius: theme.radius.xl,
     padding: theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: theme.color.border,
     ...theme.shadow.card,
   },
   divider: {
@@ -390,8 +389,8 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
+    borderTopLeftRadius: theme.radius['2xl'],
+    borderTopRightRadius: theme.radius['2xl'],
     paddingHorizontal: theme.layout.screenPadding,
     paddingBottom: theme.spacing['2xl'],
     paddingTop: theme.spacing.sm,

@@ -23,31 +23,33 @@ export const BRAND = {
 } as const;
 
 export const COLORS = {
-  /** Primary — deep teal-slate. Buttons, active states, brand surfaces. */
+  /** Primary — near-black charcoal. Dark cards, pill buttons, active states.
+   *  Monochrome by design: the product reads as premium black-and-white. */
   primary: {
-    50: '#eef6f7',
-    100: '#d3e8ea',
-    200: '#a7d1d6',
-    300: '#6fb2ba',
-    400: '#3d8f99',
-    500: '#1f6f7a',
-    600: '#175862',
-    700: '#12454d',
-    800: '#0e363c',
-    900: '#0a262b',
+    50: '#f5f5f6',
+    100: '#e8e8ea',
+    200: '#d1d1d5',
+    300: '#a8a8af',
+    400: '#6b6b74',
+    500: '#1b1b20',
+    600: '#141418',
+    700: '#0e0e12',
+    800: '#09090c',
+    900: '#050507',
   },
-  /** Accent — warm amber. Fares, negotiation, anything about money. */
+  /** Accent — the same near-black. In a monochrome system money and emphasis
+   *  read as bold black rather than a colour. */
   accent: {
-    50: '#fff8ec',
-    100: '#ffecc9',
-    200: '#ffd88f',
-    300: '#ffc154',
-    400: '#f7a927',
-    500: '#e08c0b',
-    600: '#b56c06',
-    700: '#8c520a',
-    800: '#6b3f0e',
-    900: '#4d2d0b',
+    50: '#f6f6f7',
+    100: '#ececee',
+    200: '#d6d6da',
+    300: '#adadb4',
+    400: '#5f5f68',
+    500: '#111114',
+    600: '#0c0c0f',
+    700: '#08080a',
+    800: '#050507',
+    900: '#020203',
   },
   neutral: {
     0: '#ffffff',
@@ -82,10 +84,11 @@ export const SPACING = {
 } as const;
 
 export const RADII = {
-  sm: 6,
-  md: 10,
-  lg: 14,
-  xl: 20,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 26,
+  '2xl': 34,
   pill: 999,
 } as const;
 
@@ -94,10 +97,10 @@ export const RADII = {
  * fare reads at the same visual weight in both places.
  */
 export const TYPOGRAPHY = {
-  display: { size: 34, lineHeight: 40, weight: '700' },
-  h1: { size: 26, lineHeight: 32, weight: '700' },
-  h2: { size: 21, lineHeight: 28, weight: '600' },
-  h3: { size: 18, lineHeight: 24, weight: '600' },
+  display: { size: 40, lineHeight: 44, weight: '800' },
+  h1: { size: 30, lineHeight: 36, weight: '800' },
+  h2: { size: 22, lineHeight: 28, weight: '700' },
+  h3: { size: 18, lineHeight: 24, weight: '700' },
   body: { size: 15, lineHeight: 22, weight: '400' },
   bodyStrong: { size: 15, lineHeight: 22, weight: '600' },
   caption: { size: 13, lineHeight: 18, weight: '400' },

@@ -52,9 +52,9 @@ export const theme = {
   layout: LAYOUT,
 
   text: {
-    display: { fontSize: TYPOGRAPHY.display.size, lineHeight: TYPOGRAPHY.display.lineHeight, fontWeight: '700' as const },
-    h1: { fontSize: TYPOGRAPHY.h1.size, lineHeight: TYPOGRAPHY.h1.lineHeight, fontWeight: '700' as const },
-    h2: { fontSize: TYPOGRAPHY.h2.size, lineHeight: TYPOGRAPHY.h2.lineHeight, fontWeight: '600' as const },
+    display: { fontSize: TYPOGRAPHY.display.size, lineHeight: TYPOGRAPHY.display.lineHeight, fontWeight: '800' as const, letterSpacing: -0.8 },
+    h1: { fontSize: TYPOGRAPHY.h1.size, lineHeight: TYPOGRAPHY.h1.lineHeight, fontWeight: '800' as const, letterSpacing: -0.6 },
+    h2: { fontSize: TYPOGRAPHY.h2.size, lineHeight: TYPOGRAPHY.h2.lineHeight, fontWeight: '700' as const, letterSpacing: -0.3 },
     h3: { fontSize: TYPOGRAPHY.h3.size, lineHeight: TYPOGRAPHY.h3.lineHeight, fontWeight: '600' as const },
     body: { fontSize: TYPOGRAPHY.body.size, lineHeight: TYPOGRAPHY.body.lineHeight, fontWeight: '400' as const },
     bodyStrong: { fontSize: TYPOGRAPHY.bodyStrong.size, lineHeight: TYPOGRAPHY.bodyStrong.lineHeight, fontWeight: '600' as const },

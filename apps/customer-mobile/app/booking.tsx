@@ -186,18 +186,26 @@ export default function Booking() {
     }
   }
 
-  const destinations = useMemo(
-    () => [
-      ...saved.map((location) => ({
+  const destinations = useMemo(() => {
+    // Merge saved locations and landmarks, de-duplicated by address so the same
+    // place never appears (or renders with a duplicate React key) twice. A saved
+    // location takes precedence over a landmark with the same address.
+    const byAddress = new Map<string, { address: string; latitude: number; longitude: number; label: string | null }>();
+    for (const location of saved) {
+      byAddress.set(location.address, {
         address: location.address,
         latitude: location.latitude,
         longitude: location.longitude,
         label: location.label,
-      })),
-      ...LANDMARKS.map((place) => ({ ...place, label: null as string | null })),
-    ],
-    [saved],
-  );
+      });
+    }
+    for (const place of LANDMARKS) {
+      if (!byAddress.has(place.address)) {
+        byAddress.set(place.address, { ...place, label: null });
+      }
+    }
+    return [...byAddress.values()];
+  }, [saved]);
 
   if (locating) return <Loading message="Finding your location" />;
 
