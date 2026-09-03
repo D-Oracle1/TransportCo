@@ -100,6 +100,7 @@ export default function Home() {
       setTrackingId(null);
       setTracking(null);
       resetFlow();
+      void load();
     });
   }
   async function cancelRide() {
@@ -107,6 +108,7 @@ export default function Home() {
     setBusy('accept');
     await api.post(`/trips/${trackingId}/cancel`, { reason: 'changed_mind' }).catch(() => undefined);
     setBusy(null);
+    setActive(null);
     leaveTracking();
   }
 
@@ -297,9 +299,10 @@ export default function Home() {
         </View>
       </SafeAreaView>
 
-      {/* active trip pill */}
-      {active ? (
-        <Pressable onPress={() => router.push({ pathname: '/trip', params: { id: active.id } })} style={{ position: 'absolute', top: 100, left: theme.layout.screenPadding, right: theme.layout.screenPadding, backgroundColor: theme.color.primary, borderRadius: theme.radius.lg, padding: theme.spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', ...theme.shadow.card }}>
+      {/* active trip pill — tapping flips the sheet into the black tracking card
+          (see enterTracking), rather than pushing to the full-page trip screen */}
+      {active && phase !== 'tracking' ? (
+        <Pressable onPress={() => enterTracking(active.id)} style={{ position: 'absolute', top: 100, left: theme.layout.screenPadding, right: theme.layout.screenPadding, backgroundColor: theme.color.primary, borderRadius: theme.radius.lg, padding: theme.spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', ...theme.shadow.card }}>
           <View style={{ flex: 1 }}>
             <Label variant="caption" tone="inverse">{active.statusLabel}</Label>
             <Label variant="bodyStrong" tone="inverse" numberOfLines={1}>{active.destination.address}</Label>
@@ -526,15 +529,19 @@ function TrackingFlip({ flip, height, from, to, fareMinor, trip, onCancel, onOpe
   const cancellable = ['FARE_LOCKED', 'DRIVER_ASSIGNED'].includes(status);
   const done = ['TRIP_COMPLETED', 'REVIEW_PENDING', 'PAYMENT_PENDING', 'COMPLETED', 'CANCELLED'].includes(status);
   const fare = trip?.finalFareMinor ?? trip?.quotedFareMinor ?? fareMinor;
+  // Entered from the active-trip pill after a reload? The in-session pickup /
+  // destination are gone, so fall back to the addresses on the fetched trip.
+  const fromAddr = from || trip?.pickup.address || '';
+  const toAddr = to || trip?.destination.address || '';
 
   return (
     <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height }}>
       {/* FRONT — white summary, flips away */}
       <Animated.View style={[face, { backgroundColor: theme.color.surface, transform: [{ perspective: 1200 }, { rotateY: frontRotate }], ...theme.shadow.sheet }]}>
         <Handle dark={false} />
-        <Label variant="h2">Booking your ride…</Label>
-        <View style={{ marginTop: theme.spacing.lg }}><RouteMini from={from} to={to} inverse={false} /></View>
-        <Label variant="fare" style={{ marginTop: theme.spacing.lg }}>{formatMoney(fareMinor)}</Label>
+        <Label variant="h2">{trip?.driver ? 'Your ride' : 'Finding your driver…'}</Label>
+        <View style={{ marginTop: theme.spacing.lg }}><RouteMini from={fromAddr} to={toAddr} inverse={false} /></View>
+        <Label variant="fare" style={{ marginTop: theme.spacing.lg }}>{formatMoney(fare)}</Label>
       </Animated.View>
 
       {/* BACK — black tracking card */}
@@ -555,7 +562,7 @@ function TrackingFlip({ flip, height, from, to, fareMinor, trip, onCancel, onOpe
           <Label variant="h2" tone="inverse" style={{ marginTop: 4 }}>{trip?.statusLabel ?? 'Assigning a company driver'}</Label>
         )}
 
-        <View style={{ marginTop: theme.spacing.lg }}><RouteMini from={from} to={to} inverse /></View>
+        <View style={{ marginTop: theme.spacing.lg }}><RouteMini from={fromAddr} to={toAddr} inverse /></View>
 
         <View style={{ marginTop: theme.spacing.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <View>
