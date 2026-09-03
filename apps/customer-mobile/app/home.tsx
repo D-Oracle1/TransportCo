@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutAnimation, Platform, Pressable, ScrollView, UIManager, useWindowDimensions, View } from 'react-native';
+import { Animated, LayoutAnimation, Platform, Pressable, ScrollView, UIManager, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -83,7 +83,6 @@ export default function Home() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Tracking: after booking, the sheet flips to a black card instead of a page.
-  const { height: winH } = useWindowDimensions();
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [tracking, setTracking] = useState<TrackingTrip | null>(null);
   const flip = useRef(new Animated.Value(0)).current;
@@ -315,7 +314,6 @@ export default function Home() {
       {phase === 'tracking' ? (
         <TrackingFlip
           flip={flip}
-          height={Math.min(winH * 0.64, 580)}
           from={pickup?.address ?? ''}
           to={destination?.address ?? ''}
           fareMinor={quote?.fareMinor ?? trip?.quotedFareMinor ?? 0}
@@ -513,17 +511,19 @@ const MUTED_ON_DARK = 'rgba(255,255,255,0.6)';
 /** The booking sheet flips over to this on booking: a black card that finds the
  *  driver, shows who's coming, and lets the customer cancel until the driver
  *  moves — no page change. */
-function TrackingFlip({ flip, height, from, to, fareMinor, trip, onCancel, onOpen, onDone, busy }: {
-  flip: Animated.Value; height: number; from: string; to: string; fareMinor: number;
+function TrackingFlip({ flip, from, to, fareMinor, trip, onCancel, onOpen, onDone, busy }: {
+  flip: Animated.Value; from: string; to: string; fareMinor: number;
   trip: TrackingTrip | null; onCancel: () => void; onOpen: () => void; onDone: () => void; busy: boolean;
 }) {
   const frontRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
   const backRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] });
+  // Shared face look. The BACK face flows normally so the card is exactly as
+  // tall as its content; the FRONT face is overlaid absolutely on top of it.
   const face = {
-    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
     borderTopLeftRadius: theme.radius['2xl'], borderTopRightRadius: theme.radius['2xl'],
     backfaceVisibility: 'hidden', paddingHorizontal: theme.layout.screenPadding, paddingTop: theme.spacing.lg,
   } as const;
+  const frontFill = { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 } as const;
 
   const status = trip?.status ?? 'FARE_LOCKED';
   const cancellable = ['FARE_LOCKED', 'DRIVER_ASSIGNED'].includes(status);
@@ -535,17 +535,17 @@ function TrackingFlip({ flip, height, from, to, fareMinor, trip, onCancel, onOpe
   const toAddr = to || trip?.destination.address || '';
 
   return (
-    <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height }}>
-      {/* FRONT — white summary, flips away */}
-      <Animated.View style={[face, { backgroundColor: theme.color.surface, transform: [{ perspective: 1200 }, { rotateY: frontRotate }], ...theme.shadow.sheet }]}>
+    <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
+      {/* FRONT — white summary, flips away (overlaid on the back face) */}
+      <Animated.View style={[face, frontFill, { backgroundColor: theme.color.surface, transform: [{ perspective: 1200 }, { rotateY: frontRotate }], ...theme.shadow.sheet }]}>
         <Handle dark={false} />
         <Label variant="h2">{trip?.driver ? 'Your ride' : 'Finding your driver…'}</Label>
         <View style={{ marginTop: theme.spacing.lg }}><RouteMini from={fromAddr} to={toAddr} inverse={false} /></View>
         <Label variant="fare" style={{ marginTop: theme.spacing.lg }}>{formatMoney(fare)}</Label>
       </Animated.View>
 
-      {/* BACK — black tracking card */}
-      <Animated.View style={[face, { backgroundColor: theme.color.primaryDark, transform: [{ perspective: 1200 }, { rotateY: backRotate }], ...theme.shadow.sheet }]}>
+      {/* BACK — black tracking card. In normal flow, so it sets the card height. */}
+      <Animated.View style={[face, { backgroundColor: theme.color.primaryDark, paddingBottom: theme.spacing['2xl'], transform: [{ perspective: 1200 }, { rotateY: backRotate }], ...theme.shadow.sheet }]}>
         <Handle dark />
         <Label variant="overline" style={{ color: MUTED_ON_DARK }}>{trip?.driver ? 'Your driver' : 'Finding your driver'}</Label>
         {trip?.driver ? (
@@ -572,7 +572,7 @@ function TrackingFlip({ flip, height, from, to, fareMinor, trip, onCancel, onOpe
           <Pressable onPress={onOpen} hitSlop={8}><Label variant="caption" style={{ color: MUTED_ON_DARK }}>Full trip ›</Label></Pressable>
         </View>
 
-        <View style={{ position: 'absolute', left: theme.layout.screenPadding, right: theme.layout.screenPadding, bottom: theme.spacing.xl }}>
+        <View style={{ marginTop: theme.spacing.lg }}>
           {done ? (
             <Button label="Done" variant="secondary" onPress={onDone} />
           ) : cancellable ? (
