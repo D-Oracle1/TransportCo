@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutAnimation, Platform, Pressable, ScrollView, UIManager, View } from 'react-native';
+import { Animated, LayoutAnimation, Platform, Pressable, ScrollView, TextInput, UIManager, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -102,13 +102,22 @@ export default function Home() {
       void load();
     });
   }
-  async function cancelRide() {
-    if (!trackingId) return;
+  // Returns whether the cancellation actually succeeded. The pill and the
+  // tracking card are only torn down on a real success, so a rejected reason
+  // (or a network error) leaves the ride — and the picker — in place.
+  async function cancelRide(reason: string, note: string): Promise<boolean> {
+    if (!trackingId) return false;
     setBusy('accept');
-    await api.post(`/trips/${trackingId}/cancel`, { reason: 'changed_mind' }).catch(() => undefined);
-    setBusy(null);
-    setActive(null);
-    leaveTracking();
+    try {
+      await api.post(`/trips/${trackingId}/cancel`, { reason, note: note || undefined });
+      setBusy(null);
+      setActive(null);
+      leaveTracking();
+      return true;
+    } catch {
+      setBusy(null);
+      return false;
+    }
   }
 
   useEffect(() => {
@@ -508,13 +517,35 @@ function MapCanvas({ hasRoute }: { hasRoute: boolean }) {
 
 const MUTED_ON_DARK = 'rgba(255,255,255,0.6)';
 
+/** Cancellation reasons — keys must match the API's cancelTripSchema enum. */
+const CANCEL_REASONS: { key: string; label: string }[] = [
+  { key: 'changed_plans', label: 'Plans changed' },
+  { key: 'driver_taking_too_long', label: 'Driver too slow' },
+  { key: 'wrong_address', label: 'Wrong address' },
+  { key: 'found_another_ride', label: 'Found another ride' },
+  { key: 'fare_too_high', label: 'Fare too high' },
+  { key: 'safety_concern', label: 'Safety concern' },
+  { key: 'other', label: 'Something else' },
+];
+
 /** The booking sheet flips over to this on booking: a black card that finds the
  *  driver, shows who's coming, and lets the customer cancel until the driver
  *  moves — no page change. */
 function TrackingFlip({ flip, from, to, fareMinor, trip, onCancel, onOpen, onDone, busy }: {
   flip: Animated.Value; from: string; to: string; fareMinor: number;
-  trip: TrackingTrip | null; onCancel: () => void; onOpen: () => void; onDone: () => void; busy: boolean;
+  trip: TrackingTrip | null; onCancel: (reason: string, note: string) => Promise<boolean>; onOpen: () => void; onDone: () => void; busy: boolean;
 }) {
+  const [picking, setPicking] = useState(false);
+  const [reason, setReason] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [failed, setFailed] = useState(false);
+  const confirmCancel = async () => {
+    if (!reason) return;
+    setFailed(false);
+    const ok = await onCancel(reason, note.trim());
+    if (!ok) setFailed(true); // the card stays open so they can retry
+  };
+  const closePicker = () => { animate(); setPicking(false); setReason(null); setNote(''); setFailed(false); };
   const frontRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
   const backRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] });
   // Shared face look. The BACK face flows normally so the card is exactly as
@@ -547,40 +578,77 @@ function TrackingFlip({ flip, from, to, fareMinor, trip, onCancel, onOpen, onDon
       {/* BACK — black tracking card. In normal flow, so it sets the card height. */}
       <Animated.View style={[face, { backgroundColor: theme.color.primaryDark, paddingBottom: theme.spacing['2xl'], transform: [{ perspective: 1200 }, { rotateY: backRotate }], ...theme.shadow.sheet }]}>
         <Handle dark />
-        <Label variant="overline" style={{ color: MUTED_ON_DARK }}>{trip?.driver ? 'Your driver' : 'Finding your driver'}</Label>
-        {trip?.driver ? (
-          <View style={{ marginTop: theme.spacing.sm, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-              <Label variant="h3" tone="inverse">{trip.driver.name.charAt(0)}</Label>
+        {picking ? (
+          /* Why are you cancelling? — reason chips + an optional note. */
+          <>
+            <Label variant="h2" tone="inverse">Cancel this ride?</Label>
+            <Label variant="caption" style={{ color: MUTED_ON_DARK, marginTop: 4 }}>Tell us why — it helps us keep drivers on time.</Label>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, marginTop: theme.spacing.lg }}>
+              {CANCEL_REASONS.map((r) => {
+                const on = reason === r.key;
+                return (
+                  <Pressable key={r.key} onPress={() => setReason(r.key)} style={{ paddingHorizontal: theme.spacing.md, paddingVertical: 9, borderRadius: theme.radius.pill, backgroundColor: on ? theme.color.surface : 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: on ? theme.color.surface : 'rgba(255,255,255,0.14)' }}>
+                    <Label variant="caption" style={{ color: on ? theme.color.text : 'rgba(255,255,255,0.85)', fontWeight: '600' }}>{r.label}</Label>
+                  </Pressable>
+                );
+              })}
             </View>
-            <View style={{ flex: 1 }}>
-              <Label variant="h3" tone="inverse">{trip.driver.name}</Label>
-              {trip.driver.vehicle ? <Label variant="caption" style={{ color: MUTED_ON_DARK }} numberOfLines={1}>{trip.driver.vehicle.color} {trip.driver.vehicle.make} {trip.driver.vehicle.model} · {trip.driver.vehicle.plateNumber}</Label> : null}
+
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              placeholder={reason === 'other' ? 'Tell us what happened' : 'Add a note (optional)'}
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              multiline
+              style={{ marginTop: theme.spacing.lg, minHeight: 46, borderRadius: theme.radius.md, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, color: theme.color.surface, fontSize: 15 }}
+            />
+
+            {failed ? <Label variant="caption" style={{ color: '#ff8a80', marginTop: theme.spacing.sm }}>We couldn’t cancel just now. Please try again.</Label> : null}
+
+            <View style={{ marginTop: theme.spacing.lg }}>
+              <Button label="Confirm cancellation" variant="secondary" onPress={confirmCancel} loading={busy} disabled={!reason || busy} />
+              <Pressable onPress={closePicker} disabled={busy} style={{ marginTop: theme.spacing.md, alignItems: 'center' }}><Label variant="caption" style={{ color: MUTED_ON_DARK }}>Keep my ride</Label></Pressable>
             </View>
-          </View>
+          </>
         ) : (
-          <Label variant="h2" tone="inverse" style={{ marginTop: 4 }}>{trip?.statusLabel ?? 'Assigning a company driver'}</Label>
+          <>
+            <Label variant="overline" style={{ color: MUTED_ON_DARK }}>{trip?.driver ? 'Your driver' : 'Finding your driver'}</Label>
+            {trip?.driver ? (
+              <View style={{ marginTop: theme.spacing.sm, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Label variant="h3" tone="inverse">{trip.driver.name.charAt(0)}</Label>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Label variant="h3" tone="inverse">{trip.driver.name}</Label>
+                  {trip.driver.vehicle ? <Label variant="caption" style={{ color: MUTED_ON_DARK }} numberOfLines={1}>{trip.driver.vehicle.color} {trip.driver.vehicle.make} {trip.driver.vehicle.model} · {trip.driver.vehicle.plateNumber}</Label> : null}
+                </View>
+              </View>
+            ) : (
+              <Label variant="h2" tone="inverse" style={{ marginTop: 4 }}>{trip?.statusLabel ?? 'Assigning a company driver'}</Label>
+            )}
+
+            <View style={{ marginTop: theme.spacing.lg }}><RouteMini from={fromAddr} to={toAddr} inverse /></View>
+
+            <View style={{ marginTop: theme.spacing.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <View>
+                <Label variant="overline" style={{ color: MUTED_ON_DARK }}>Agreed fare</Label>
+                <Label variant="h1" tone="inverse">{formatMoney(fare)}</Label>
+              </View>
+              <Pressable onPress={onOpen} hitSlop={8}><Label variant="caption" style={{ color: MUTED_ON_DARK }}>Full trip ›</Label></Pressable>
+            </View>
+
+            <View style={{ marginTop: theme.spacing.lg }}>
+              {done ? (
+                <Button label="Done" variant="secondary" onPress={onDone} />
+              ) : cancellable ? (
+                <Button label="Cancel ride" variant="secondary" onPress={() => { animate(); setPicking(true); }} />
+              ) : (
+                <Label variant="caption" center style={{ color: MUTED_ON_DARK }}>Your driver is on the way — sit tight.</Label>
+              )}
+            </View>
+          </>
         )}
-
-        <View style={{ marginTop: theme.spacing.lg }}><RouteMini from={fromAddr} to={toAddr} inverse /></View>
-
-        <View style={{ marginTop: theme.spacing.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <View>
-            <Label variant="overline" style={{ color: MUTED_ON_DARK }}>Agreed fare</Label>
-            <Label variant="h1" tone="inverse">{formatMoney(fare)}</Label>
-          </View>
-          <Pressable onPress={onOpen} hitSlop={8}><Label variant="caption" style={{ color: MUTED_ON_DARK }}>Full trip ›</Label></Pressable>
-        </View>
-
-        <View style={{ marginTop: theme.spacing.lg }}>
-          {done ? (
-            <Button label="Done" variant="secondary" onPress={onDone} />
-          ) : cancellable ? (
-            <Button label="Cancel ride" variant="secondary" onPress={onCancel} loading={busy} />
-          ) : (
-            <Label variant="caption" center style={{ color: MUTED_ON_DARK }}>Your driver is on the way — sit tight.</Label>
-          )}
-        </View>
       </Animated.View>
     </View>
   );
