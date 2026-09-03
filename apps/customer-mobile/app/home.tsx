@@ -59,7 +59,7 @@ export default function Home() {
   const [saved, setSaved] = useState<SavedLocation[]>([]);
   const [active, setActive] = useState<ActiveTrip | null>(null);
 
-  const [editing, setEditing] = useState<Editing>('to');
+  const [editing, setEditing] = useState<Editing>(null);
   const [search, setSearch] = useState('');
   const [phase, setPhase] = useState<Phase>('choose');
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -123,7 +123,7 @@ export default function Home() {
     if (editing === 'from') {
       setPickup(place);
       if (destination) void quoteFor(place, destination);
-      else { animate(); setEditing('to'); }
+      else { animate(); setEditing(null); }
     } else {
       setDestination(place);
       if (pickup) void quoteFor(pickup, place);
@@ -141,7 +141,7 @@ export default function Home() {
       setPickup(here);
       setSearch('');
       if (destination) void quoteFor(here, destination);
-      else { animate(); setEditing('to'); }
+      else { animate(); setEditing(null); }
     } catch {
       setBanner({ message: 'We could not get your location.', tone: 'danger' });
     }
@@ -212,7 +212,7 @@ export default function Home() {
     if (trip) await api.post(`/trips/${trip.id}/cancel`, { reason: 'fare_too_high' }).catch(() => undefined);
     resetFlow();
   }
-  function resetFlow() { animate(); setPhase('choose'); setDestination(null); setQuote(null); setTrip(null); setNegotiation(null); setOffer(''); setBanner(null); setEditing('to'); }
+  function resetFlow() { animate(); setPhase('choose'); setDestination(null); setQuote(null); setTrip(null); setNegotiation(null); setOffer(''); setBanner(null); setEditing(null); }
 
   useEffect(() => {
     const waiting = negotiation?.status === 'AWAITING_COMPANY';
@@ -345,7 +345,7 @@ export default function Home() {
                   <View style={{ marginTop: theme.spacing.lg, gap: theme.spacing.sm }}>
                     {negotiation.timeline.map((e) => (
                       <View key={e.id} style={{ alignSelf: e.party === 'customer' ? 'flex-end' : 'flex-start', backgroundColor: e.party === 'customer' ? theme.color.primary : theme.color.surfaceMuted, borderRadius: theme.radius.lg, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}>
-                        <Label variant="caption" tone={e.party === 'customer' ? 'inverse' : 'muted'}>{e.party === 'customer' ? 'You' : 'TransportCo'}</Label>
+                        <Label variant="caption" tone={e.party === 'customer' ? 'inverse' : 'muted'}>{e.party === 'customer' ? 'You' : 'PEGO'}</Label>
                         <Label variant="bodyStrong" tone={e.party === 'customer' ? 'inverse' : 'default'}>{formatMoney(e.amountMinor)}</Label>
                       </View>
                     ))}

@@ -185,7 +185,7 @@ export default function TripScreen() {
                 <Label variant="h3">{trip.driver.name}</Label>
                 <Label variant="caption" tone="muted">
                   {trip.driver.rating ? `${trip.driver.rating.toFixed(1)} ★ · ` : ''}
-                  TransportCo driver
+                  PEGO driver
                 </Label>
               </View>
             </View>

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TransportCo Driver",
+    "name": "PEGO Driver",
     "slug": "transportco-driver",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "splash": {
       "resizeMode": "contain",
-      "backgroundColor": "#12454d"
+      "backgroundColor": "#0e0e12"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -28,7 +28,7 @@
     "android": {
       "package": "com.transportco.driver",
       "adaptiveIcon": {
-        "backgroundColor": "#12454d"
+        "backgroundColor": "#0e0e12"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",

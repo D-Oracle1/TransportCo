@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TransportCo",
+    "name": "PEGO",
     "slug": "transportco-customer",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "splash": {
       "resizeMode": "contain",
-      "backgroundColor": "#1f6f7a"
+      "backgroundColor": "#0e0e12"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -30,7 +30,7 @@
     "android": {
       "package": "com.transportco.customer",
       "adaptiveIcon": {
-        "backgroundColor": "#1f6f7a"
+        "backgroundColor": "#0e0e12"
       },
       "config": {
         "googleMaps": {

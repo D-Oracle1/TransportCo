@@ -47,7 +47,7 @@ export default function Welcome() {
               See your fare before you book — and tell us if it is too high.
             </Label>
             <Label variant="body" tone="inverse" style={{ opacity: 0.85 }}>
-              Every driver is a TransportCo employee in a company vehicle.
+              Every driver is a PEGO employee in a company vehicle.
             </Label>
             <Label variant="body" tone="inverse" style={{ opacity: 0.85 }}>
               Pay with cash, transfer or card. No card needed to sign up.

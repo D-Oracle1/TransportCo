@@ -296,7 +296,7 @@ export default function FareScreen() {
                 }}
               >
                 <Label variant="caption" tone={entry.party === 'customer' ? 'inverse' : 'muted'}>
-                  {entry.party === 'customer' ? 'You offered' : 'TransportCo offered'}
+                  {entry.party === 'customer' ? 'You offered' : 'PEGO offered'}
                 </Label>
                 <Label variant="h3" tone={entry.party === 'customer' ? 'inverse' : 'default'}>
                   {formatMoney(entry.amountMinor)}

@@ -11,15 +11,15 @@
  * transport operator rather than a consumer marketplace.
  */
 export const BRAND = {
-  name: 'TransportCo',
-  legalName: 'TransportCo Limited',
-  shortName: 'TransportCo',
+  name: 'PEGO',
+  legalName: 'PEGO Limited',
+  shortName: 'PEGO',
   tagline: 'Agreed fare. Company driver. Every trip.',
-  supportEmail: 'support@transportco.example',
+  supportEmail: 'support@pego.example',
   supportPhone: '+2340000000000',
-  websiteUrl: 'https://transportco.example',
+  websiteUrl: 'https://pego.example',
   /** Single letter/monogram used until a real logo exists. */
-  monogram: 'T',
+  monogram: 'P',
 } as const;
 
 export const COLORS = {
