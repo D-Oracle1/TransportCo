@@ -126,7 +126,7 @@ export default async function DashboardPage() {
         <Card
           title="Waiting for a driver"
           action={
-            <Link href="/dispatch" className="text-sm font-semibold text-brand-600 hover:underline">
+            <Link href="/dispatch" className="text-sm font-semibold text-ink-200 hover:text-white hover:underline">
               Open dispatch
             </Link>
           }
@@ -151,26 +151,26 @@ export default async function DashboardPage() {
                   {board.data.slice(0, 6).map((trip) => (
                     <tr key={trip.tripId}>
                       <td>
-                        <Link href={`/trips/${trip.tripId}`} className="font-semibold text-brand-600 hover:underline">
+                        <Link href={`/trips/${trip.tripId}`} className="font-semibold text-white hover:underline">
                           {trip.reference}
                         </Link>
-                        <p className="text-xs text-ink-500">{trip.customerName}</p>
+                        <p className="text-xs text-ink-400">{trip.customerName}</p>
                       </td>
                       <td className="max-w-[180px] truncate">{trip.pickupAddress}</td>
                       <td>
                         <Money minor={trip.fareMinor} />
                       </td>
-                      <td className="tabular text-ink-500">{Math.round(trip.waitingSeconds / 60)} min</td>
+                      <td className="tabular text-ink-400">{Math.round(trip.waitingSeconds / 60)} min</td>
                       <td>
                         {trip.recommended ? (
                           <>
-                            <span className="font-medium text-ink-800">{trip.recommended.name}</span>
-                            <p className="text-xs text-ink-500">
+                            <span className="font-medium text-ink-100">{trip.recommended.name}</span>
+                            <p className="text-xs text-ink-400">
                               {trip.recommended.distanceLabel} · {trip.recommended.workload} load
                             </p>
                           </>
                         ) : (
-                          <span className="text-danger-700">No driver available</span>
+                          <span className="text-danger-500">No driver available</span>
                         )}
                       </td>
                     </tr>
@@ -184,7 +184,7 @@ export default async function DashboardPage() {
         <Card
           title="Negotiations to decide"
           action={
-            <Link href="/negotiations" className="text-sm font-semibold text-brand-600 hover:underline">
+            <Link href="/negotiations" className="text-sm font-semibold text-ink-200 hover:text-white hover:underline">
               Open console
             </Link>
           }
@@ -212,20 +212,20 @@ export default async function DashboardPage() {
                       <td>
                         <Link
                           href={`/negotiations/${item.negotiationId}`}
-                          className="font-semibold text-brand-600 hover:underline"
+                          className="font-semibold text-white hover:underline"
                         >
                           {item.tripReference}
                         </Link>
-                        <p className="text-xs text-ink-500">{item.customerName}</p>
+                        <p className="text-xs text-ink-400">{item.customerName}</p>
                       </td>
                       <td>
                         <Money minor={item.originalFareMinor} />
                       </td>
                       <td>
-                        <Money minor={item.customerOfferMinor} className="text-accent-700" />
+                        <Money minor={item.customerOfferMinor} className="text-white" />
                       </td>
                       <td className="tabular">{item.discountPercent}%</td>
-                      <td className="tabular text-ink-500">
+                      <td className="tabular text-ink-400">
                         {item.roundsUsed}/{item.maxRounds}
                       </td>
                       <td>
@@ -242,7 +242,7 @@ export default async function DashboardPage() {
 
       {(s?.openFraudSignals ?? 0) > 0 ? (
         <Card className="mt-5" title="Risk signals">
-          <div className="px-5 py-4 text-sm text-ink-600">
+          <div className="px-5 py-4 text-sm text-ink-300">
             <StatusBadge status="failed" />{' '}
             <span className="ml-2">
               {s?.openFraudSignals} open signal(s) need review. Check Reports → Risk.

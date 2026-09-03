@@ -32,6 +32,7 @@ const config: Config = {
       },
       boxShadow: {
         card: '0 1px 2px rgba(11, 14, 16, 0.06), 0 8px 24px -12px rgba(11, 14, 16, 0.18)',
+        glass: '0 10px 40px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
       },
     },
   },

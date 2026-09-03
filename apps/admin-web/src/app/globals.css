@@ -3,17 +3,16 @@
 @tailwind utilities;
 
 /*
- * Console styling.
+ * Console styling — dark, glassy, premium.
  *
- * Desktop-first, because dispatch happens on a desk with a large screen — but
- * never unusable on a tablet, since the operations manager checks the board
- * from the yard. Density is deliberately high: a dispatcher wants twenty trips
- * visible, not six with generous whitespace.
+ * Deep charcoal ground with glassmorphism cards. Desktop-first (dispatch happens
+ * on a desk), dense enough to show twenty trips at a glance, but calm: monochrome
+ * with a single near-white accent for primary actions.
  */
 
 :root {
-  --console-sidebar: 248px;
-  --console-header: 60px;
+  --console-sidebar: 84px;
+  --console-header: 68px;
 }
 
 @layer base {
@@ -23,50 +22,55 @@
   }
 
   body {
-    @apply bg-ink-50 text-ink-800 antialiased;
-    font-feature-settings: 'tnum' 1; /* tabular figures: fares line up in columns */
+    @apply text-ink-100 antialiased;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(90, 100, 120, 0.18), transparent 60%),
+      radial-gradient(900px 500px at 0% 110%, rgba(70, 80, 100, 0.14), transparent 60%),
+      #0b0e12;
+    font-feature-settings: 'tnum' 1;
   }
 
-  /* Money and references are read column-wise; proportional digits make that
-     harder than it needs to be. */
   .tabular {
     font-variant-numeric: tabular-nums;
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white;
+    @apply outline-none ring-2 ring-white/40 ring-offset-2;
+    --tw-ring-offset-color: #0b0e12;
   }
 }
 
 @layer components {
+  /* Glass card: translucent, blurred, hairline border. */
   .card {
-    @apply rounded-lg border border-ink-200 bg-white shadow-card;
+    @apply rounded-xl border border-white/10 bg-white/[0.05] shadow-glass backdrop-blur-xl;
   }
 
   .card-header {
-    @apply flex items-center justify-between border-b border-ink-100 px-5 py-3.5;
+    @apply flex items-center justify-between border-b border-white/10 px-5 py-3.5;
   }
 
   .card-title {
-    @apply text-sm font-semibold text-ink-800;
+    @apply text-sm font-semibold text-white;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold
            transition-colors disabled:cursor-not-allowed disabled:opacity-50;
-    min-height: 38px;
+    min-height: 40px;
   }
 
+  /* Primary = a bright white pill on the dark ground. */
   .btn-primary {
-    @apply btn bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700;
+    @apply btn bg-white text-ink-900 hover:bg-ink-100 active:bg-ink-200;
   }
 
   .btn-accent {
-    @apply btn bg-accent-500 text-ink-900 hover:bg-accent-400 active:bg-accent-600;
+    @apply btn bg-white text-ink-900 hover:bg-ink-100 active:bg-ink-200;
   }
 
   .btn-ghost {
-    @apply btn border border-ink-200 bg-white text-ink-700 hover:bg-ink-50;
+    @apply btn border border-white/15 bg-white/5 text-ink-100 hover:bg-white/10;
   }
 
   .btn-danger {
@@ -74,13 +78,13 @@
   }
 
   .input {
-    @apply w-full rounded-md border border-ink-300 bg-white px-3 py-2 text-sm text-ink-900
-           placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500;
-    min-height: 38px;
+    @apply w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white
+           placeholder:text-ink-400 focus:border-white/30 focus:outline-none focus:ring-1 focus:ring-white/30;
+    min-height: 40px;
   }
 
   .label {
-    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-500;
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-400;
   }
 
   .table {
@@ -88,32 +92,30 @@
   }
 
   .table thead th {
-    @apply border-b border-ink-200 bg-ink-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-500;
+    @apply border-b border-white/10 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-400;
   }
 
   .table tbody td {
-    @apply border-b border-ink-100 px-4 py-3 align-middle text-ink-700;
+    @apply border-b border-white/[0.06] px-4 py-3 align-middle text-ink-200;
   }
 
   .table tbody tr:hover {
-    @apply bg-ink-50/70;
+    @apply bg-white/[0.04];
   }
 
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold;
+    @apply inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs font-semibold text-ink-200;
   }
 
   .stat-value {
-    @apply text-2xl font-bold tabular text-ink-900;
+    @apply text-3xl font-bold tabular;
   }
 
   .stat-label {
-    @apply text-xs font-medium uppercase tracking-wide text-ink-500;
+    @apply text-xs font-medium uppercase tracking-wide text-ink-400;
   }
 }
 
-/* The live map and long tables scroll inside themselves; the page never scrolls
-   sideways. */
 .scroll-x {
   @apply overflow-x-auto;
 }

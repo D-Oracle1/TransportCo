@@ -45,10 +45,10 @@ export function Stat({
   tone?: 'default' | 'warning' | 'danger' | 'success';
 }) {
   const toneClass = {
-    default: 'text-ink-900',
-    warning: 'text-warning-700',
-    danger: 'text-danger-700',
-    success: 'text-success-700',
+    default: 'text-white',
+    warning: 'text-warning-500',
+    danger: 'text-danger-500',
+    success: 'text-success-500',
   }[tone];
 
   return (
@@ -115,8 +115,8 @@ export function Money({ minor, className = '' }: { minor: number | null | undefi
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      <p className="text-sm font-semibold text-ink-700">{title}</p>
-      {hint ? <p className="mt-1 max-w-sm text-sm text-ink-500">{hint}</p> : null}
+      <p className="text-sm font-semibold text-ink-200">{title}</p>
+      {hint ? <p className="mt-1 max-w-sm text-sm text-ink-400">{hint}</p> : null}
     </div>
   );
 }
@@ -124,8 +124,8 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
 export function ErrorState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-1 px-6 py-10 text-center">
-      <p className="text-sm font-semibold text-danger-700">Could not load this</p>
-      <p className="max-w-sm text-sm text-ink-500">{message}</p>
+      <p className="text-sm font-semibold text-danger-500">Could not load this</p>
+      <p className="max-w-sm text-sm text-ink-400">{message}</p>
     </div>
   );
 }
@@ -142,8 +142,8 @@ export function PageHeader({
   return (
     <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-xl font-bold text-ink-900">{title}</h1>
-        {subtitle ? <p className="mt-0.5 text-sm text-ink-500">{subtitle}</p> : null}
+        <h1 className="text-xl font-bold text-white">{title}</h1>
+        {subtitle ? <p className="mt-0.5 text-sm text-ink-400">{subtitle}</p> : null}
       </div>
       {action}
     </header>
@@ -165,7 +165,7 @@ export function TimeAgo({ at }: { at: string | null }) {
           : new Date(at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
 
   return (
-    <time dateTime={at} title={new Date(at).toLocaleString('en-NG')} className="text-ink-500">
+    <time dateTime={at} title={new Date(at).toLocaleString('en-NG')} className="text-ink-400">
       {label}
     </time>
   );
