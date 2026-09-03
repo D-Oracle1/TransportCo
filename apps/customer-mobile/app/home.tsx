@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { LayoutAnimation, Platform, Pressable, ScrollView, UIManager, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -9,49 +9,29 @@ import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
 /**
- * Home — the whole ride in one screen.
+ * Home — the whole ride on one screen.
  *
- * A single sheet carries the customer from "where are you going?" to a locked
- * fare without ever changing pages: pick a destination, see the price, and
- * either book it or say what you'd rather pay. Only the live trip (a driver on
- * the way) gets its own screen.
+ * A map fills the screen; a collapsible sheet floats over it and carries the
+ * customer from pickup + destination -> fare -> book or negotiate, never
+ * changing pages. Only the live trip gets a screen of its own.
  */
 
-interface Place {
-  latitude: number;
-  longitude: number;
-  address: string;
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-interface SavedLocation extends Place {
-  id: string;
-  label: string;
-}
-interface ActiveTrip {
-  id: string;
-  statusLabel: string;
-  fareLabel: string;
-  destination: { address: string };
-  driver: { name: string } | null;
-}
-interface Quote {
-  quoteId: string;
-  fareMinor: number;
-  distanceMetres: number;
-  durationSeconds: number;
-}
-interface TripView {
-  id: string;
-  quotedFareMinor: number;
-  finalFareMinor: number | null;
-  fareLocked: boolean;
-}
+const animate = () => LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
+
+interface Place { latitude: number; longitude: number; address: string; label?: string | null }
+interface SavedLocation extends Place { id: string; label: string }
+interface ActiveTrip { id: string; statusLabel: string; fareLabel: string; destination: { address: string } }
+interface Quote { quoteId: string; fareMinor: number }
+interface TripView { id: string; quotedFareMinor: number; fareLocked: boolean }
 interface NegotiationView {
   status: string;
   originalFareMinor: number;
   companyPositionMinor: number;
   customerPositionMinor: number | null;
   offersRemaining: number;
-  maxRounds: number;
   pendingOffer: { id: string; party: 'customer' | 'company'; amountMinor: number; expiresAt: string } | null;
   timeline: Array<{ id: string; party: 'customer' | 'company'; amountMinor: number }>;
 }
@@ -68,19 +48,19 @@ const LANDMARKS: Place[] = [
 ];
 
 type Phase = 'choose' | 'quoted' | 'negotiate';
+type Editing = 'from' | 'to' | null;
 
 export default function Home() {
   const router = useRouter();
   const { profile } = useSession();
 
-  // ── trip setup ────────────────────────────────────────────────────────────
   const [pickup, setPickup] = useState<Place | null>(null);
   const [destination, setDestination] = useState<Place | null>(null);
   const [saved, setSaved] = useState<SavedLocation[]>([]);
-  const [search, setSearch] = useState('');
   const [active, setActive] = useState<ActiveTrip | null>(null);
 
-  // ── flow ──────────────────────────────────────────────────────────────────
+  const [editing, setEditing] = useState<Editing>('to');
+  const [search, setSearch] = useState('');
   const [phase, setPhase] = useState<Phase>('choose');
   const [quote, setQuote] = useState<Quote | null>(null);
   const [trip, setTrip] = useState<TripView | null>(null);
@@ -91,41 +71,30 @@ export default function Home() {
   const [remaining, setRemaining] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Locate the customer once.
   useEffect(() => {
     void (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        setPickup({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, address: 'Current location' });
-      } catch {
-        /* pickup can be chosen from saved places */
-      }
+        setPickup((p) => p ?? { latitude: pos.coords.latitude, longitude: pos.coords.longitude, address: 'Current location' });
+      } catch { /* pick a pickup manually */ }
     })();
   }, []);
 
   const load = useCallback(async () => {
-    try {
-      const [locations, activeTrip] = await Promise.all([
-        api.get<SavedLocation[]>('/customer/me/locations').catch(() => [] as SavedLocation[]),
-        api.get<ActiveTrip | null>('/trips/active').catch(() => null),
-      ]);
-      setSaved(locations);
-      setActive(activeTrip);
-    } catch {
-      /* offline: keep last state */
-    }
+    const [locations, activeTrip] = await Promise.all([
+      api.get<SavedLocation[]>('/customer/me/locations').catch(() => [] as SavedLocation[]),
+      api.get<ActiveTrip | null>('/trips/active').catch(() => null),
+    ]);
+    setSaved(locations);
+    setActive(activeTrip);
   }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
-  // ── destinations (deduped by address so keys are always unique) ─────────────
-  const destinations = useMemo(() => {
-    const byAddress = new Map<string, Place & { label: string | null }>();
+  const places = useMemo(() => {
+    const byAddress = new Map<string, Place>();
     for (const s of saved) byAddress.set(s.address, { ...s, label: s.label });
     for (const p of LANDMARKS) if (!byAddress.has(p.address)) byAddress.set(p.address, { ...p, label: null });
     const list = [...byAddress.values()];
@@ -133,20 +102,15 @@ export default function Home() {
     return q ? list.filter((p) => p.address.toLowerCase().includes(q) || (p.label ?? '').toLowerCase().includes(q)) : list;
   }, [saved, search]);
 
-  // ── actions ─────────────────────────────────────────────────────────────
-  async function chooseDestination(place: Place) {
-    setDestination(place);
-    setSearch('');
-    setBanner(null);
-    if (!pickup) {
-      setBanner({ message: 'Turn on location or pick a saved place as your pickup.', tone: 'info' });
-      return;
-    }
+  async function quoteFor(pu: Place, dest: Place) {
     setBusy('quote');
+    setBanner(null);
     try {
-      const q = await api.post<Quote>('/trips/estimate', { pickup, destination: place, passengers: 1 });
+      const q = await api.post<Quote>('/trips/estimate', { pickup: pu, destination: dest, passengers: 1 });
       setQuote(q);
+      animate();
       setPhase('quoted');
+      setEditing(null);
     } catch (e) {
       setBanner({ message: e instanceof ApiError ? e.message : 'We could not price this trip right now.', tone: 'danger' });
     } finally {
@@ -154,191 +118,142 @@ export default function Home() {
     }
   }
 
-  async function createTrip(): Promise<string | null> {
-    if (!quote) return null;
-    const created = await api.post<{ tripId: string }>(
-      '/trips',
-      { quoteId: quote.quoteId, paymentMethod: 'cash' },
-      `${quote.quoteId}-create`,
-    );
-    return created.tripId;
+  function pick(place: Place) {
+    setSearch('');
+    if (editing === 'from') {
+      setPickup(place);
+      if (destination) void quoteFor(place, destination);
+      else { animate(); setEditing('to'); }
+    } else {
+      setDestination(place);
+      if (pickup) void quoteFor(pickup, place);
+      else { animate(); setEditing('from'); }
+    }
   }
 
+  async function useCurrentLocation() {
+    setBanner(null);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { setBanner({ message: 'Turn on location access to use your current spot.', tone: 'info' }); return; }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const here: Place = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, address: 'Current location' };
+      setPickup(here);
+      setSearch('');
+      if (destination) void quoteFor(here, destination);
+      else { animate(); setEditing('to'); }
+    } catch {
+      setBanner({ message: 'We could not get your location.', tone: 'danger' });
+    }
+  }
+
+  function startEditing(which: Editing) { animate(); setEditing(which); setSearch(''); }
+
+  async function createTrip(): Promise<string | null> {
+    if (!quote) return null;
+    const created = await api.post<{ tripId: string }>('/trips', { quoteId: quote.quoteId, paymentMethod: 'cash' }, `${quote.quoteId}-create`);
+    return created.tripId;
+  }
   async function bookNow() {
     if (!quote) return;
-    setBusy('book');
-    setBanner(null);
+    setBusy('book'); setBanner(null);
     try {
       const tripId = await createTrip();
       if (!tripId) return;
       await api.post(`/trips/${tripId}/accept-fare`, {});
       router.push({ pathname: '/trip', params: { id: tripId } });
       resetFlow();
-    } catch (e) {
-      setBanner({ message: e instanceof ApiError ? e.message : 'We could not book this trip.', tone: 'danger' });
-    } finally {
-      setBusy(null);
-    }
+    } catch (e) { setBanner({ message: e instanceof ApiError ? e.message : 'We could not book this trip.', tone: 'danger' }); }
+    finally { setBusy(null); }
   }
-
   async function startNegotiation() {
     if (!quote) return;
-    setBusy('offer');
-    setBanner(null);
+    setBusy('offer'); setBanner(null);
     try {
       const tripId = await createTrip();
       if (!tripId) return;
-      const [t, n] = await Promise.all([
-        api.get<TripView>(`/trips/${tripId}`),
-        api.get<NegotiationView | null>(`/trips/${tripId}/negotiation`),
-      ]);
-      setTrip(t);
-      setNegotiation(n);
-      setPhase('negotiate');
-    } catch (e) {
-      setBanner({ message: e instanceof ApiError ? e.message : 'We could not start a negotiation.', tone: 'danger' });
-    } finally {
-      setBusy(null);
-    }
+      const [t, n] = await Promise.all([api.get<TripView>(`/trips/${tripId}`), api.get<NegotiationView | null>(`/trips/${tripId}/negotiation`)]);
+      setTrip(t); setNegotiation(n); animate(); setPhase('negotiate');
+    } catch (e) { setBanner({ message: e instanceof ApiError ? e.message : 'We could not start a negotiation.', tone: 'danger' }); }
+    finally { setBusy(null); }
   }
-
   const reloadTrip = useCallback(async () => {
     if (!trip) return;
     try {
-      const [t, n] = await Promise.all([
-        api.get<TripView>(`/trips/${trip.id}`),
-        api.get<NegotiationView | null>(`/trips/${trip.id}/negotiation`),
-      ]);
-      setTrip(t);
-      setNegotiation(n);
-      if (t.fareLocked) {
-        router.push({ pathname: '/trip', params: { id: t.id } });
-        resetFlow();
-      }
-    } catch {
-      /* keep last */
-    }
+      const [t, n] = await Promise.all([api.get<TripView>(`/trips/${trip.id}`), api.get<NegotiationView | null>(`/trips/${trip.id}/negotiation`)]);
+      setTrip(t); setNegotiation(n);
+      if (t.fareLocked) { router.push({ pathname: '/trip', params: { id: t.id } }); resetFlow(); }
+    } catch { /* keep */ }
   }, [trip, router]);
-
   async function submitOffer() {
     const naira = Number(offer.replace(/[^0-9]/g, ''));
     if (!naira || !trip) return;
-    setBusy('offer');
-    setBanner(null);
+    setBusy('offer'); setBanner(null);
     try {
-      const r = await api.post<{ outcome: string; message: string }>(`/trips/${trip.id}/negotiate`, {
-        amountMinor: naira * 100,
-      });
+      const r = await api.post<{ outcome: string; message: string }>(`/trips/${trip.id}/negotiate`, { amountMinor: naira * 100 });
       setOffer('');
-      if (r.outcome === 'accepted') {
-        router.push({ pathname: '/trip', params: { id: trip.id } });
-        resetFlow();
-        return;
-      }
+      if (r.outcome === 'accepted') { router.push({ pathname: '/trip', params: { id: trip.id } }); resetFlow(); return; }
       setBanner({ message: r.message, tone: r.outcome === 'rejected' || r.outcome === 'limit_reached' ? 'danger' : 'info' });
       await reloadTrip();
-    } catch (e) {
-      setBanner({ message: e instanceof ApiError ? e.message : 'We could not send your offer.', tone: 'danger' });
-    } finally {
-      setBusy(null);
-    }
+    } catch (e) { setBanner({ message: e instanceof ApiError ? e.message : 'We could not send your offer.', tone: 'danger' }); }
+    finally { setBusy(null); }
   }
-
   async function acceptCurrent() {
     if (!trip) return;
-    setBusy('accept');
-    setBanner(null);
+    setBusy('accept'); setBanner(null);
     try {
       const pending = negotiation?.pendingOffer?.party === 'company' ? negotiation.pendingOffer.id : undefined;
       await api.post(`/trips/${trip.id}/accept-fare`, pending ? { offerId: pending } : {});
-      router.push({ pathname: '/trip', params: { id: trip.id } });
-      resetFlow();
-    } catch (e) {
-      setBanner({ message: e instanceof ApiError ? e.message : 'We could not confirm that fare.', tone: 'danger' });
-      await reloadTrip();
-    } finally {
-      setBusy(null);
-    }
+      router.push({ pathname: '/trip', params: { id: trip.id } }); resetFlow();
+    } catch (e) { setBanner({ message: e instanceof ApiError ? e.message : 'We could not confirm that fare.', tone: 'danger' }); await reloadTrip(); }
+    finally { setBusy(null); }
   }
-
   async function cancelFlow() {
     if (trip) await api.post(`/trips/${trip.id}/cancel`, { reason: 'fare_too_high' }).catch(() => undefined);
     resetFlow();
   }
+  function resetFlow() { animate(); setPhase('choose'); setDestination(null); setQuote(null); setTrip(null); setNegotiation(null); setOffer(''); setBanner(null); setEditing('to'); }
 
-  function resetFlow() {
-    setPhase('choose');
-    setDestination(null);
-    setQuote(null);
-    setTrip(null);
-    setNegotiation(null);
-    setOffer('');
-    setBanner(null);
-  }
-
-  // Poll while an offer is with the company; tick the countdown for a pending one.
   useEffect(() => {
     const waiting = negotiation?.status === 'AWAITING_COMPANY';
     if (waiting && !pollRef.current) pollRef.current = setInterval(() => void reloadTrip(), 5000);
     if (!waiting && pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, [negotiation?.status, reloadTrip]);
-
   useEffect(() => {
     const pending = negotiation?.pendingOffer;
     if (!pending) return;
-    const tick = () => {
-      const s = Math.max(0, Math.floor((new Date(pending.expiresAt).getTime() - Date.now()) / 1000));
-      setRemaining(s);
-      if (s === 0) void reloadTrip();
-    };
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
+    const tick = () => { const s = Math.max(0, Math.floor((new Date(pending.expiresAt).getTime() - Date.now()) / 1000)); setRemaining(s); if (s === 0) void reloadTrip(); };
+    tick(); const timer = setInterval(tick, 1000); return () => clearInterval(timer);
   }, [negotiation?.pendingOffer, reloadTrip]);
 
-  const greeting = profile?.fullName?.split(' ')[0] ?? 'there';
   const currentFare = negotiation?.companyPositionMinor ?? trip?.quotedFareMinor ?? quote?.fareMinor ?? 0;
   const awaitingCompany = negotiation?.status === 'AWAITING_COMPANY';
   const pendingCompany = negotiation?.pendingOffer?.party === 'company';
   const offersLeft = negotiation?.offersRemaining ?? 0;
+  const initial = (profile?.fullName ?? 'You').charAt(0).toUpperCase();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.color.surfaceMuted }} edges={['top']}>
-      {/* ── MAP HERO ──────────────────────────────────────────────────────── */}
-      <View style={{ flex: 1, backgroundColor: theme.color.surfaceMuted, overflow: 'hidden' }}>
-        {/* top bar */}
-        <View style={{ paddingHorizontal: theme.layout.screenPadding, paddingTop: theme.spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View>
-            <Label variant="caption" tone="muted">Hello, {greeting}</Label>
-            <Label variant="h2">Book a ride</Label>
+    <View style={{ flex: 1, backgroundColor: theme.color.surfaceMuted }}>
+      {/* ── MAP ──────────────────────────────────────────────────────────── */}
+      <MapCanvas hasRoute={!!destination} />
+
+      {/* floating top controls */}
+      <SafeAreaView edges={['top']} style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: theme.layout.screenPadding, paddingTop: theme.spacing.sm }}>
+          <View style={{ backgroundColor: theme.color.surface, borderRadius: theme.radius.pill, paddingHorizontal: theme.spacing.md, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6, ...theme.shadow.card }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.color.text }} />
+            <Label variant="caption" tone="secondary">Drivers nearby</Label>
           </View>
-          <Pressable onPress={() => router.push('/profile')} hitSlop={10} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.color.primary, alignItems: 'center', justifyContent: 'center' }}>
-            <Label variant="bodyStrong" tone="inverse">{greeting.charAt(0).toUpperCase()}</Label>
+          <Pressable onPress={() => router.push('/profile')} hitSlop={8} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.color.surface, alignItems: 'center', justifyContent: 'center', ...theme.shadow.card }}>
+            <Label variant="bodyStrong">{initial}</Label>
           </Pressable>
         </View>
+      </SafeAreaView>
 
-        {/* stylised route panel (a real map drops in here on native builds) */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing.xl }}>
-          <RouteGlyph hasDestination={!!destination} />
-          {destination ? (
-            <Label variant="bodyStrong" center style={{ marginTop: theme.spacing.lg }} numberOfLines={2}>
-              {destination.address}
-            </Label>
-          ) : (
-            <Label variant="body" tone="muted" center style={{ marginTop: theme.spacing.lg }}>
-              Pick where you're going to see your fare
-            </Label>
-          )}
-        </View>
-      </View>
-
-      {/* ── ACTIVE TRIP PILL (a driver is on the way) ─────────────────────── */}
+      {/* active trip pill */}
       {active ? (
-        <Pressable
-          onPress={() => router.push({ pathname: '/trip', params: { id: active.id } })}
-          style={{ position: 'absolute', top: 96, left: theme.layout.screenPadding, right: theme.layout.screenPadding, backgroundColor: theme.color.primary, borderRadius: theme.radius.lg, padding: theme.spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', ...theme.shadow.card }}
-        >
+        <Pressable onPress={() => router.push({ pathname: '/trip', params: { id: active.id } })} style={{ position: 'absolute', top: 100, left: theme.layout.screenPadding, right: theme.layout.screenPadding, backgroundColor: theme.color.primary, borderRadius: theme.radius.lg, padding: theme.spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', ...theme.shadow.card }}>
           <View style={{ flex: 1 }}>
             <Label variant="caption" tone="inverse">{active.statusLabel}</Label>
             <Label variant="bodyStrong" tone="inverse" numberOfLines={1}>{active.destination.address}</Label>
@@ -347,144 +262,181 @@ export default function Home() {
         </Pressable>
       ) : null}
 
-      {/* ── SHEET ─────────────────────────────────────────────────────────── */}
-      <View style={{ backgroundColor: theme.color.surface, borderTopLeftRadius: theme.radius['2xl'], borderTopRightRadius: theme.radius['2xl'], marginTop: -theme.radius['2xl'], maxHeight: '62%', ...theme.shadow.sheet }}>
-        <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: theme.color.borderStrong, alignSelf: 'center', marginTop: theme.spacing.sm }} />
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: theme.layout.screenPadding, paddingBottom: theme.spacing['2xl'] }}>
+      {/* ── COLLAPSIBLE SHEET ────────────────────────────────────────────── */}
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: theme.color.surface, borderTopLeftRadius: theme.radius['2xl'], borderTopRightRadius: theme.radius['2xl'], maxHeight: editing ? '82%' : '58%', ...theme.shadow.sheet }}>
+        <Pressable onPress={() => { animate(); setEditing((e) => (e ? null : 'to')); }} hitSlop={12} style={{ alignItems: 'center', paddingTop: theme.spacing.sm, paddingBottom: 2 }}>
+          <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: theme.color.borderStrong }} />
+        </Pressable>
 
-          {banner ? <View style={{ marginBottom: theme.spacing.md }}><Banner message={banner.message} tone={banner.tone} /></View> : null}
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: theme.layout.screenPadding, paddingTop: theme.spacing.sm, paddingBottom: theme.spacing['2xl'] }}>
+          <SafeAreaView edges={['bottom']}>
+            <Label variant="h2">Book a ride</Label>
 
-          {/* PHASE: choose destination */}
-          {phase === 'choose' ? (
-            <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, marginBottom: theme.spacing.md }}>
-                <Dot filled />
-                <Label variant="body" tone="secondary" style={{ flex: 1 }} numberOfLines={1}>{pickup?.address ?? 'Set pickup'}</Label>
+            {banner ? <View style={{ marginTop: theme.spacing.md }}><Banner message={banner.message} tone={banner.tone} /></View> : null}
+
+            {/* FROM / TO — the two inputs */}
+            {phase === 'choose' ? (
+              <View style={{ marginTop: theme.spacing.md, backgroundColor: theme.color.surfaceMuted, borderRadius: theme.radius.lg, padding: theme.spacing.sm }}>
+                <FromToRow active={editing === 'from'} icon="ring" label="From" value={pickup?.address ?? 'Set pickup'} placeholder={!pickup} onPress={() => startEditing('from')} />
+                <View style={{ height: 1, backgroundColor: theme.color.border, marginLeft: 34 }} />
+                <FromToRow active={editing === 'to'} icon="dot" label="To" value={destination?.address ?? 'Where to?'} placeholder={!destination} onPress={() => startEditing('to')} />
               </View>
-              <Field
-                label="Where to?"
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Search a place or landmark"
-                autoCorrect={false}
-              />
-              {busy === 'quote' ? (
-                <Label variant="caption" tone="muted" style={{ marginBottom: theme.spacing.sm }}>Getting your fare…</Label>
-              ) : null}
-              <View style={{ gap: theme.spacing.xs }}>
-                {destinations.slice(0, 8).map((place) => (
-                  <Pressable
-                    key={place.address}
-                    onPress={() => chooseDestination(place)}
-                    disabled={busy !== null}
-                    style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.md, opacity: pressed ? 0.6 : 1 })}
-                  >
-                    <Dot />
+            ) : null}
+
+            {/* SEARCH + LIST (only while editing a field) */}
+            {phase === 'choose' && editing ? (
+              <View style={{ marginTop: theme.spacing.md }}>
+                <Field
+                  label={editing === 'from' ? 'Enter pickup' : 'Enter destination'}
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search a place or landmark"
+                  autoCorrect={false}
+                  autoFocus
+                />
+                {editing === 'from' ? (
+                  <Pressable onPress={useCurrentLocation} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.md, opacity: pressed ? 0.6 : 1 })}>
+                    <View style={{ width: 34, alignItems: 'center' }}>
+                      <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 4, borderColor: theme.color.text }} />
+                    </View>
+                    <Label variant="bodyStrong">Use my current location</Label>
+                  </Pressable>
+                ) : null}
+                {busy === 'quote' ? <Label variant="caption" tone="muted" style={{ paddingVertical: theme.spacing.sm }}>Getting your fare…</Label> : null}
+                {places.slice(0, 7).map((place) => (
+                  <Pressable key={place.address} onPress={() => pick(place)} disabled={busy !== null} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.md, opacity: pressed ? 0.6 : 1 })}>
+                    <View style={{ width: 34, alignItems: 'center' }}><Marker kind="dot" /></View>
                     <View style={{ flex: 1 }}>
                       {place.label ? <Label variant="bodyStrong">{place.label}</Label> : null}
-                      <Label variant={place.label ? 'caption' : 'body'} tone={place.label ? 'muted' : 'default'} numberOfLines={1}>
-                        {place.address}
-                      </Label>
+                      <Label variant={place.label ? 'caption' : 'body'} tone={place.label ? 'muted' : 'default'} numberOfLines={1}>{place.address}</Label>
                     </View>
                   </Pressable>
                 ))}
               </View>
-            </>
-          ) : null}
+            ) : null}
 
-          {/* PHASE: quoted — fare + book / offer */}
-          {phase === 'quoted' && quote ? (
-            <>
-              <Label variant="overline" tone="muted">Your fare</Label>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4, marginBottom: theme.spacing.lg }}>
-                <Label variant="fare">{formatMoney(quote.fareMinor)}</Label>
-                <Label variant="caption" tone="muted">cash · agreed upfront</Label>
-              </View>
-              <Button label="Book Now" onPress={bookNow} loading={busy === 'book'} disabled={busy !== null} />
-              <View style={{ height: theme.spacing.sm }} />
-              <Button label="Make an offer" variant="secondary" onPress={startNegotiation} loading={busy === 'offer'} disabled={busy !== null} />
-              <Pressable onPress={resetFlow} disabled={busy !== null} style={{ marginTop: theme.spacing.md, alignItems: 'center' }}>
-                <Label variant="caption" tone="muted">Change destination</Label>
-              </Pressable>
-            </>
-          ) : null}
+            {/* QUOTED */}
+            {phase === 'quoted' && quote ? (
+              <>
+                <View style={{ marginTop: theme.spacing.md, backgroundColor: theme.color.surfaceMuted, borderRadius: theme.radius.lg, padding: theme.spacing.md }}>
+                  <RouteSummary from={pickup?.address ?? ''} to={destination?.address ?? ''} onEdit={resetFlow} />
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: theme.spacing.lg, marginBottom: theme.spacing.md }}>
+                  <Label variant="fare">{formatMoney(quote.fareMinor)}</Label>
+                  <Label variant="caption" tone="muted">cash · agreed upfront</Label>
+                </View>
+                <Button label="Book Now" onPress={bookNow} loading={busy === 'book'} disabled={busy !== null} />
+                <View style={{ height: theme.spacing.sm }} />
+                <Button label="Make an offer" variant="secondary" onPress={startNegotiation} loading={busy === 'offer'} disabled={busy !== null} />
+              </>
+            ) : null}
 
-          {/* PHASE: negotiate */}
-          {phase === 'negotiate' && trip ? (
-            <>
-              <Label variant="overline" tone="muted">{pendingCompany ? 'Our offer' : 'Current fare'}</Label>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4 }}>
-                <Label variant="fare">{formatMoney(currentFare)}</Label>
-                {negotiation && negotiation.originalFareMinor !== currentFare ? (
-                  <Label variant="caption" tone="muted">was {formatMoney(negotiation.originalFareMinor)}</Label>
+            {/* NEGOTIATE */}
+            {phase === 'negotiate' && trip ? (
+              <>
+                <Label variant="overline" tone="muted" style={{ marginTop: theme.spacing.md }}>{pendingCompany ? 'Our offer' : 'Current fare'}</Label>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4 }}>
+                  <Label variant="fare">{formatMoney(currentFare)}</Label>
+                  {negotiation && negotiation.originalFareMinor !== currentFare ? <Label variant="caption" tone="muted">was {formatMoney(negotiation.originalFareMinor)}</Label> : null}
+                </View>
+                {pendingCompany ? <View style={{ marginTop: theme.spacing.sm }}><Badge label={remaining <= 0 ? 'Offer expired' : `Expires in ${humanizeCountdown(remaining)}`} tone="neutral" /></View> : null}
+                {awaitingCompany ? <Label variant="caption" tone="muted" style={{ marginTop: theme.spacing.md }}>Reviewing your offer of {formatMoney(negotiation?.customerPositionMinor ?? 0)} — usually under a minute.</Label> : null}
+                {negotiation && negotiation.timeline.length > 0 ? (
+                  <View style={{ marginTop: theme.spacing.lg, gap: theme.spacing.sm }}>
+                    {negotiation.timeline.map((e) => (
+                      <View key={e.id} style={{ alignSelf: e.party === 'customer' ? 'flex-end' : 'flex-start', backgroundColor: e.party === 'customer' ? theme.color.primary : theme.color.surfaceMuted, borderRadius: theme.radius.lg, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}>
+                        <Label variant="caption" tone={e.party === 'customer' ? 'inverse' : 'muted'}>{e.party === 'customer' ? 'You' : 'TransportCo'}</Label>
+                        <Label variant="bodyStrong" tone={e.party === 'customer' ? 'inverse' : 'default'}>{formatMoney(e.amountMinor)}</Label>
+                      </View>
+                    ))}
+                  </View>
                 ) : null}
-              </View>
-
-              {pendingCompany ? (
-                <View style={{ marginTop: theme.spacing.sm }}>
-                  <Badge label={remaining <= 0 ? 'Offer expired' : `Expires in ${humanizeCountdown(remaining)}`} tone={remaining < 60 ? 'danger' : 'neutral'} />
-                </View>
-              ) : null}
-
-              {awaitingCompany ? (
-                <Label variant="caption" tone="muted" style={{ marginTop: theme.spacing.md }}>
-                  Reviewing your offer of {formatMoney(negotiation?.customerPositionMinor ?? 0)} — usually under a minute.
-                </Label>
-              ) : null}
-
-              {negotiation && negotiation.timeline.length > 0 ? (
-                <View style={{ marginTop: theme.spacing.lg, gap: theme.spacing.sm }}>
-                  {negotiation.timeline.map((e) => (
-                    <View key={e.id} style={{ alignSelf: e.party === 'customer' ? 'flex-end' : 'flex-start', backgroundColor: e.party === 'customer' ? theme.color.primary : theme.color.surfaceMuted, borderRadius: theme.radius.lg, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}>
-                      <Label variant="caption" tone={e.party === 'customer' ? 'inverse' : 'muted'}>
-                        {e.party === 'customer' ? 'You' : 'TransportCo'}
-                      </Label>
-                      <Label variant="bodyStrong" tone={e.party === 'customer' ? 'inverse' : 'default'}>{formatMoney(e.amountMinor)}</Label>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {!awaitingCompany && offersLeft > 0 ? (
-                <View style={{ marginTop: theme.spacing.lg }}>
-                  <Field
-                    label={`I'd rather pay (₦) · ${offersLeft} left`}
-                    value={offer}
-                    onChangeText={(v) => setOffer(v.replace(/[^0-9]/g, ''))}
-                    keyboardType="number-pad"
-                    placeholder={String(Math.round((currentFare * 0.9) / 100))}
-                  />
-                  <Button label="Send offer" variant="secondary" onPress={submitOffer} loading={busy === 'offer'} disabled={busy !== null || offer.length === 0} />
-                </View>
-              ) : null}
-
-              <View style={{ height: theme.spacing.lg }} />
-              <Button label={`Accept ${formatMoney(currentFare)}`} onPress={acceptCurrent} loading={busy === 'accept'} disabled={busy !== null || awaitingCompany || (pendingCompany && remaining <= 0)} />
-              <Pressable onPress={cancelFlow} disabled={busy !== null} style={{ marginTop: theme.spacing.md, alignItems: 'center' }}>
-                <Label variant="caption" tone="muted">Cancel</Label>
-              </Pressable>
-            </>
-          ) : null}
+                {!awaitingCompany && offersLeft > 0 ? (
+                  <View style={{ marginTop: theme.spacing.lg }}>
+                    <Field label={`I'd rather pay (₦) · ${offersLeft} left`} value={offer} onChangeText={(v) => setOffer(v.replace(/[^0-9]/g, ''))} keyboardType="number-pad" placeholder={String(Math.round((currentFare * 0.9) / 100))} />
+                    <Button label="Send offer" variant="secondary" onPress={submitOffer} loading={busy === 'offer'} disabled={busy !== null || offer.length === 0} />
+                  </View>
+                ) : null}
+                <View style={{ height: theme.spacing.lg }} />
+                <Button label={`Accept ${formatMoney(currentFare)}`} onPress={acceptCurrent} loading={busy === 'accept'} disabled={busy !== null || awaitingCompany || (pendingCompany && remaining <= 0)} />
+                <Pressable onPress={cancelFlow} disabled={busy !== null} style={{ marginTop: theme.spacing.md, alignItems: 'center' }}><Label variant="caption" tone="muted">Cancel</Label></Pressable>
+              </>
+            ) : null}
+          </SafeAreaView>
         </ScrollView>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
-// ── small monochrome primitives ───────────────────────────────────────────
-function Dot({ filled }: { filled?: boolean }) {
+// ── pieces ──────────────────────────────────────────────────────────────────
+function Marker({ kind }: { kind: 'ring' | 'dot' }) {
+  return kind === 'ring'
+    ? <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 3, borderColor: theme.color.text }} />
+    : <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: theme.color.text }} />;
+}
+
+function FromToRow({ active, icon, label, value, placeholder, onPress }: { active: boolean; icon: 'ring' | 'dot'; label: string; value: string; placeholder?: boolean; onPress: () => void }) {
   return (
-    <View style={{ width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: theme.color.text, backgroundColor: filled ? theme.color.text : 'transparent' }} />
+    <Pressable onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.md, paddingHorizontal: theme.spacing.sm }}>
+      <View style={{ width: 22, alignItems: 'center' }}><Marker kind={icon} /></View>
+      <View style={{ flex: 1 }}>
+        <Label variant="overline" tone="muted">{label}</Label>
+        <Label variant="bodyStrong" tone={placeholder ? 'muted' : 'default'} numberOfLines={1}>{value}</Label>
+      </View>
+      {active ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.color.text }} /> : null}
+    </Pressable>
   );
 }
 
-/** A stylised A→B route glyph standing in for the live map inside Expo Go. */
-function RouteGlyph({ hasDestination }: { hasDestination: boolean }) {
+function RouteSummary({ from, to, onEdit }: { from: string; to: string; onEdit: () => void }) {
   return (
-    <View style={{ alignItems: 'center' }}>
-      <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 3, borderColor: theme.color.text }} />
-      <View style={{ width: 3, height: 46, backgroundColor: hasDestination ? theme.color.text : theme.color.borderStrong, marginVertical: 4, borderRadius: 2 }} />
-      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: hasDestination ? theme.color.text : theme.color.borderStrong }} />
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ width: 22, alignItems: 'center' }}>
+        <Marker kind="ring" />
+        <View style={{ width: 2, height: 18, backgroundColor: theme.color.borderStrong, marginVertical: 3 }} />
+        <Marker kind="dot" />
+      </View>
+      <View style={{ flex: 1, marginLeft: theme.spacing.sm, gap: theme.spacing.lg }}>
+        <Label variant="body" numberOfLines={1}>{from}</Label>
+        <Label variant="body" numberOfLines={1}>{to}</Label>
+      </View>
+      <Pressable onPress={onEdit} hitSlop={8}><Label variant="caption" tone="muted">Edit</Label></Pressable>
+    </View>
+  );
+}
+
+/** A stylised map standing in for the live map inside Expo Go (a real map view
+ *  drops in on a native build). Faint streets, a scatter of nearby drivers, and
+ *  the pickup marker at the centre. */
+function MapCanvas({ hasRoute }: { hasRoute: boolean }) {
+  const streets = [
+    { top: '18%', left: '-10%', w: '120%', h: 2, rot: '8deg' },
+    { top: '46%', left: '-10%', w: '120%', h: 3, rot: '-5deg' },
+    { top: '72%', left: '-10%', w: '120%', h: 2, rot: '4deg' },
+    { top: '-10%', left: '30%', w: 2, h: '120%', rot: '10deg' },
+    { top: '-10%', left: '66%', w: 3, h: '120%', rot: '-8deg' },
+  ] as const;
+  const drivers = [
+    { top: '30%', left: '24%' }, { top: '38%', left: '70%' }, { top: '58%', left: '40%' }, { top: '64%', left: '78%' }, { top: '26%', left: '52%' },
+  ] as const;
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: theme.color.surfaceMuted, overflow: 'hidden' }}>
+      {streets.map((s, i) => (
+        <View key={i} style={{ position: 'absolute', top: s.top as never, left: s.left as never, width: s.w as never, height: s.h as never, backgroundColor: theme.color.border, transform: [{ rotate: s.rot }] }} />
+      ))}
+      {drivers.map((d, i) => (
+        <View key={i} style={{ position: 'absolute', top: d.top as never, left: d.left as never, width: 26, height: 26, borderRadius: 13, backgroundColor: theme.color.surface, alignItems: 'center', justifyContent: 'center', ...theme.shadow.card }}>
+          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: theme.color.text }} />
+        </View>
+      ))}
+      {/* pickup marker, upper third so the sheet doesn't cover it */}
+      <View style={{ position: 'absolute', top: '34%', left: 0, right: 0, alignItems: 'center' }}>
+        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: theme.color.text, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.color.surface }} />
+        </View>
+        {hasRoute ? <View style={{ marginTop: 4, backgroundColor: theme.color.text, paddingHorizontal: 10, paddingVertical: 3, borderRadius: theme.radius.pill }}><Label variant="caption" tone="inverse">Your route</Label></View> : null}
+      </View>
     </View>
   );
 }
